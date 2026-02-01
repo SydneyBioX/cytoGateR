@@ -1,0 +1,31 @@
+Package: softGatingIMC
+Type: Package
+Title: annotate cell-type for IMC data
+Version: 0.1.0
+Authors@R: c(
+    person(
+      "Lijia", "Yu",
+      email = "yulj2010@gmail.com",
+      role = c("aut", "cre")
+    )
+  )
+Description: annotate cell-type for IMC data.
+License: GPL (>= 3)
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 4.1.0)
+Imports:
+    SummarizedExperiment,
+    SpatialExperiment,
+    mclust,
+    ggplot2,
+    dplyr,
+    tibble,
+    stats,
+    rlang,
+    igraph,
+    ggraph
+Suggests:
+    viridisLite
