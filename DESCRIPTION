@@ -1,6 +1,6 @@
-Package: softGatingIMC
+Package: cytoGateR
 Type: Package
-Title: annotate cell-type for IMC data
+Title: An R package for cell type annotation in low-marker protein imaging data (e.g., IMC and CODEX) using marker-aware gating and classification strategies.
 Version: 0.1.0
 Authors@R: c(
     person(
