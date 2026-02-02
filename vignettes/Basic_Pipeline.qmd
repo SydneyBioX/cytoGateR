@@ -21,7 +21,7 @@ format:
 
 # Basic Pipeline Graph
 
-![](images/clipboard-187988242.png)
+![](images/workflow.png)
 
 # Getting Started
 
