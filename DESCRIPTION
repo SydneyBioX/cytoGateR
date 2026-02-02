@@ -3,27 +3,19 @@ Type: Package
 Title: An R package for cell type annotation in low-marker protein imaging data (e.g., IMC and CODEX) using marker-aware gating and classification strategies.
 Version: 0.1.0
 Authors@R: c(
-  person(
-    "Matthew", "Li",
-    email = "mali0328@uni.sydney.edu.au",
-    role = "aut"
-  ),
-  person(
-    "Nikhil", "Karthik",
-    email = "nkar0221@uni.sydney.edu.au",
-    role = "aut"
-  ),
-  person(
-    "Harry", "Robertson",
-    email = "harry.robertson@sydney.edu.au",
-    role = "aut"
-  ),
-  person(
-      "Lijia", "Yu",
-      email = "yulj2010@gmail.com",
-      role = c("aut", "cre")
-    )
-)
+    person("Matthew", "Li",
+           email = "mali0328@uni.sydney.edu.au",
+           role = "aut"),
+    person("Nikhil", "Karthik",
+           email = "nkar0221@uni.sydney.edu.au",
+           role = "aut"),
+    person("Harry", "Robertson",
+           email = "harry.robertson@sydney.edu.au",
+           role = "aut"),
+    person("Lijia", "Yu",
+           email = "yulj2010@gmail.com",
+           role = c("aut", "cre")
+           ))
 Description: annotate cell-type for IMC data.
 License: GPL (>= 3)
 Encoding: UTF-8
