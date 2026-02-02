@@ -1,6 +1,4 @@
-Package: cytoGateR
 Type: Package
-Title: An R package for cell type annotation in low-marker protein imaging data (e.g., IMC and CODEX) using marker-aware gating and classification strategies.
 Version: 0.1.0
 Authors@R: c(
     person(
@@ -26,6 +24,11 @@ Imports:
     stats,
     rlang,
     igraph,
-    ggraph
+    ggraph,
+    future,
+    furrr,
+    parallel,
+    tidyr,
+    gt
 Suggests:
     viridisLite

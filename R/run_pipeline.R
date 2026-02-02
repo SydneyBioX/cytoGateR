@@ -108,18 +108,26 @@ run_tree_gating <- function(spe,
 
   expr_norm <- SummarizedExperiment::assay(spe, assay_name)
 
-  trees <- setNames(vector("list", nrow(lineage_table)), lineage_table$cell_type)
+  # Setup parallel processing with future
+  oplan <- future::plan(future::multisession, workers = parallel::detectCores() - 1)
+  on.exit(future::plan(oplan), add = TRUE)
 
-  for (i in seq_len(nrow(lineage_table))) {
-    ct <- lineage_table$cell_type[i]
-    pos <- lineage_table$pos_markers[[i]]
-    neg <- lineage_table$neg_markers[[i]] %||% character(0)
+  # Build trees in parallel
+  trees_list <- furrr::future_map(
+    seq_len(nrow(lineage_table)),
+    function(i) {
+      pos <- lineage_table$pos_markers[[i]]
+      neg <- lineage_table$neg_markers[[i]] %||% character(0)
 
-    trees[[ct]] <- build_fullcoverage_tree(expr_norm, pos, neg,
-                                           max_depth = max_depth,
-                                           min_cells = min_cells,
-                                           min_score = min_score)
-  }
+      build_fullcoverage_tree(expr_norm, pos, neg,
+                              max_depth = max_depth,
+                              min_cells = min_cells,
+                              min_score = min_score)
+    },
+    .options = furrr::furrr_options(seed = TRUE)
+  )
+
+  trees <- setNames(trees_list, lineage_table$cell_type)
 
   prob_mat <- sapply(names(trees), function(ct) {
     neg <- lineage_table$neg_markers[lineage_table$cell_type == ct][[1]] %||% character(0)
@@ -130,7 +138,7 @@ run_tree_gating <- function(spe,
 
   prob_mat[!is.finite(prob_mat)] <- 0
 
-  lineage_priority <- lineage_table$cell_type[lineage_table$cell_type != "Proliferating"]
+  lineage_priority <- setdiff(lineage_table$cell_type, "Proliferating")
   prob_lineage <- prob_mat[, lineage_priority, drop = FALSE]
 
   best_idx <- apply(prob_lineage, 1, which.max)
@@ -139,7 +147,8 @@ run_tree_gating <- function(spe,
 
   hard_label <- ifelse(best_p < uncert_thresh, "Uncertain", best_lab)
 
-  p_prolif <- prob_mat[, "Proliferating"] %||% rep(0, nrow(prob_mat))
+  has_prolif <- "Proliferating" %in% colnames(prob_mat)
+  p_prolif <- if (has_prolif) prob_mat[, "Proliferating"] else rep(0, nrow(prob_mat))
   prolif_flag <- p_prolif >= 0.5
 
   hard_label_with_state <- ifelse(prolif_flag & hard_label != "Uncertain",

@@ -57,6 +57,8 @@ plot_marker_priority_tree <- function(lineage_table, marker_stats, cell_type_nam
 #' @param spe SpatialExperiment / SingleCellExperiment with P_* columns in colData.
 #' @param cell_type Character. Must match the lineage_table$cell_type used in run_soft_gating().
 #' @param image_col Column name for image ID (default "imageID").
+#' @param image_index Numeric indices or character IDs of images to plot. Defaults
+#'   to all images. If length > 1, results are faceted by image.
 #' @param x_col Coordinate column names (default auto-detect).
 #' @param y_col Coordinate column names (default auto-detect).
 #' @param point_size Size of points.
@@ -66,6 +68,7 @@ plot_marker_priority_tree <- function(lineage_table, marker_stats, cell_type_nam
 plot_probability_map <- function(spe,
                                  cell_type,
                                  image_col = "imageID",
+                                 image_index = NULL,
                                  x_col = NULL,
                                  y_col = NULL,
                                  point_size = 0.8) {
@@ -95,7 +98,36 @@ plot_probability_map <- function(spe,
     stop("image_col '", image_col, "' not found in colData(spe).")
   }
 
-  ggplot2::ggplot(
+  image_values <- unique(stats::na.omit(df[[image_col]]))
+  if (!length(image_values)) {
+    stop("No image IDs found in column '", image_col, "'.")
+  }
+
+  if (is.null(image_index)) {
+    selected_images <- image_values
+  } else if (is.character(image_index)) {
+    missing_imgs <- setdiff(image_index, image_values)
+    if (length(missing_imgs)) {
+      stop("image_index contains unknown image IDs: ", paste(missing_imgs, collapse = ", "))
+    }
+    selected_images <- image_index
+  } else {
+    if (!is.numeric(image_index) || any(is.na(image_index))) {
+      stop("image_index must be numeric indices or character image IDs.")
+    }
+    image_index <- as.integer(image_index)
+    if (any(image_index < 1L | image_index > length(image_values))) {
+      stop("image_index values must be between 1 and ", length(image_values), ".")
+    }
+    selected_images <- image_values[image_index]
+  }
+
+  df <- df[df[[image_col]] %in% selected_images & !is.na(df[[image_col]]), , drop = FALSE]
+  if (!nrow(df)) {
+    stop("No cells found for the selected image(s).")
+  }
+
+  p <- ggplot2::ggplot(
     df,
     ggplot2::aes(
       x = .data[[x_col]],
@@ -105,15 +137,21 @@ plot_probability_map <- function(spe,
   ) +
     ggplot2::geom_point(size = point_size, alpha = 0.7) +
     ggplot2::coord_fixed() +
-    ggplot2::facet_wrap(stats::as.formula(paste("~", image_col))) +
     ggplot2::scale_color_viridis_c(option = "magma") +
     ggplot2::theme_minimal() +
     ggplot2::labs(
       title = paste("Probability map:", cell_type),
+      subtitle = if (length(unique(df[[image_col]])) > 1L) "Faceted by image" else paste0("Image: ", unique(df[[image_col]])),
       color = "Probability",
       x = x_col,
       y = y_col
     )
+
+  if (length(unique(df[[image_col]])) > 1L) {
+    p <- p + ggplot2::facet_wrap(stats::as.formula(paste("~", image_col)))
+  }
+
+  p
 }
 
 
@@ -214,4 +252,1155 @@ plot_celltype_tree <- function(tree, title = "") {
                             fill = "white") +
     ggplot2::theme_void() +
     ggplot2::ggtitle(title)
+}
+
+
+#' Plot a confusion matrix heatmap
+#'
+#' Creates a heatmap with counts overlaid for a confusion matrix (table or
+#' matrix) of truth vs. predicted classes.
+#'
+#' @param conf_mat A confusion matrix as `table`, `matrix`, or data frame with
+#'   columns `truth`, `pred`, and `Freq`.
+#' @param title Plot title.
+#' @param fill_low Low-end color for the fill gradient.
+#' @param fill_high High-end color for the fill gradient.
+#'
+#' @return A `ggplot` object.
+#' @export
+plot_confusion_matrix <- function(conf_mat,
+                                  title = "Confusion matrix",
+                                  subtitle = NULL,
+                                  cv_folds = NULL,
+                                  aggregated = TRUE,
+                                  fill_low = "#f0f9e8",
+                                  fill_high = "#08589e",
+                                  plot_marginals = FALSE) {
+
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Please install ggplot2 to use plot_confusion_matrix().")
+  }
+
+  if (is.null(conf_mat)) {
+    stop("conf_mat is NULL; no predictions available to plot.")
+  }
+
+  if (is.matrix(conf_mat) || is.table(conf_mat)) {
+    df <- as.data.frame(as.table(conf_mat))
+    names(df)[seq_len(3)] <- c("truth", "pred", "Freq")
+  } else if (is.data.frame(conf_mat)) {
+    needed <- c("truth", "pred", "Freq")
+    missing_cols <- setdiff(needed, names(conf_mat))
+    if (length(missing_cols)) {
+      stop("conf_mat data.frame is missing columns: ", paste(missing_cols, collapse = ", "))
+    }
+    df <- conf_mat[, needed]
+  } else {
+    stop("conf_mat must be a table, matrix, or data.frame with truth/pred/Freq columns.")
+  }
+
+  if (!nrow(df)) stop("conf_mat is empty; nothing to plot.")
+  if (all(df$Freq == 0, na.rm = TRUE)) stop("conf_mat has all zero counts; nothing to plot.")
+
+  df$truth <- factor(df$truth)
+  df$pred <- factor(df$pred, levels = levels(df$truth))
+
+  # Prepare marginals data if requested
+  marginals_df <- NULL
+  if (plot_marginals) {
+    # Calculate row totals (marginals for Truth)
+    row_totals <- stats::aggregate(Freq ~ truth, data = df, FUN = sum)
+    row_totals$pred <- "TOTAL"
+
+    # Calculate column totals (marginals for Pred)
+    col_totals <- stats::aggregate(Freq ~ pred, data = df, FUN = sum)
+    col_totals$truth <- "TOTAL"
+
+    # Grand total
+    grand_total <- sum(df$Freq, na.rm = TRUE)
+    grand_df <- data.frame(truth = "TOTAL", pred = "TOTAL", Freq = grand_total)
+
+    # Combine marginals
+    marginals_df <- rbind(row_totals, col_totals, grand_df)
+
+    # Add factor levels for TOTAL
+    df$truth <- factor(df$truth, levels = c(levels(df$truth), "TOTAL"))
+    df$pred <- factor(df$pred, levels = c(levels(df$pred), "TOTAL"))
+    marginals_df$truth <- factor(marginals_df$truth, levels = levels(df$truth))
+    marginals_df$pred <- factor(marginals_df$pred, levels = levels(df$pred))
+  }
+
+  total_n <- sum(df$Freq, na.rm = TRUE)
+  subtitle <- subtitle %||% {
+    parts <- c(
+      if (aggregated) "Summed confusion matrix" else NULL,
+      if (!is.null(cv_folds)) paste0("CV folds = ", cv_folds) else NULL,
+      paste0("n = ", total_n)
+    )
+    paste(parts, collapse = " | ")
+  }
+
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$pred, y = .data$truth, fill = .data$Freq)) +
+    ggplot2::geom_tile(color = "white") +
+    ggplot2::geom_text(ggplot2::aes(label = .data$Freq), size = 3) +
+    ggplot2::scale_fill_gradient(low = fill_low, high = fill_high) +
+    ggplot2::labs(title = title, subtitle = subtitle, x = "Predicted", y = "Truth", fill = "Count") +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 20, hjust = 1))
+
+  # Add marginals as separate layer with fixed color
+  if (plot_marginals && !is.null(marginals_df)) {
+    p <- p +
+      ggplot2::geom_tile(data = marginals_df, ggplot2::aes(x = .data$pred, y = .data$truth),
+                         fill = "white", color = "gray50", linewidth = 1.2, show.legend = FALSE) +
+      ggplot2::geom_text(data = marginals_df, ggplot2::aes(x = .data$pred, y = .data$truth, label = .data$Freq),
+                         size = 3, color = "black", inherit.aes = FALSE)
+  }
+
+  p
+}
+
+
+#' Plot counts of a label column
+#'
+#' Horizontal bar plot of label counts with count annotations. Useful for
+#' quickly checking class balance in `colData()` label columns.
+#'
+#' @param spe A `SpatialExperiment`/`SingleCellExperiment`.
+#' @param label_col Column in `colData(spe)` containing labels to count.
+#' @param title Plot title.
+#' @param subtitle Optional subtitle. If no value provided, `label_col` is used.
+#' @param include_na Logical; if TRUE, include missing values as "NA" level. Default FALSE.
+#' @param show_legend Logical; show legend for bars. Default FALSE.
+#'
+#' @return A `ggplot` object.
+#' @export
+plot_label_counts <- function(spe,
+                              label_col,
+                              title = "Label counts",
+                              subtitle = NULL,
+                              include_na = FALSE,
+                              show_legend = FALSE) {
+
+  if (!requireNamespace("ggplot2", quietly = TRUE) ||
+      !requireNamespace("dplyr", quietly = TRUE)) {
+    stop("Please install ggplot2 and dplyr to use plot_label_counts().")
+  }
+
+  .assert_spe(spe)
+
+  df <- SummarizedExperiment::colData(spe) |> as.data.frame()
+
+  if (is.null(label_col) || !label_col %in% names(df)) {
+    stop("label_col '", label_col, "' not found in colData(spe).")
+  }
+
+  labels <- df[[label_col]]
+  if (!include_na) {
+    keep <- !is.na(labels)
+    labels <- labels[keep]
+  }
+
+  labels <- as.character(labels)
+  labels[is.na(labels)] <- "NA"
+
+  counts <- dplyr::tibble(label = labels) |>
+    dplyr::count(.data$label, name = "n") |>
+    dplyr::arrange(dplyr::desc(.data$n)) |>
+    dplyr::mutate(label = factor(.data$label, levels = rev(.data$label)))
+
+  subtitle <- subtitle %||% label_col
+
+  ggplot2::ggplot(counts, ggplot2::aes(x = .data$label, y = .data$n, fill = .data$label)) +
+    ggplot2::geom_col() +
+    ggplot2::geom_text(ggplot2::aes(label = paste0("n = ", .data$n), y = .data$n),
+                       hjust = -0.1, size = 3) +
+    ggplot2::coord_flip() +
+    ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, 0.08))) +
+    ggplot2::labs(title = title, subtitle = subtitle, x = NULL, y = "Count") +
+    ggplot2::theme_classic() +
+    ggplot2::theme(legend.position = if (show_legend) "right" else "none")
+}
+
+
+#' Plot agreement between two label columns
+#'
+#' Computes per-label agreement (Jaccard overlap) between two label columns in
+#' `colData(spe)` and visualises it as a horizontal bar plot with class sizes.
+#'
+#' @param spe A `SpatialExperiment`/`SingleCellExperiment`.
+#' @param label_col1 First label column name.
+#' @param label_col2 Second label column name.
+#' @param drop_na Logical; drop rows with NA in either label. Default TRUE.
+#' @param title Plot title.
+#' @param subtitle Optional subtitle.
+#'
+#' @return A `ggplot` object.
+#' @export
+plot_label_agreement <- function(spe,
+                                 label_col1,
+                                 label_col2,
+                                 drop_na = TRUE,
+                                 title = "Label agreement",
+                                 subtitle = "total matches / union") {
+
+  if (!requireNamespace("ggplot2", quietly = TRUE) ||
+      !requireNamespace("dplyr", quietly = TRUE)) {
+    stop("Please install ggplot2 and dplyr to use plot_label_agreement().")
+  }
+
+  agree_df <- label_agreement_rates(
+    spe,
+    label_col1 = label_col1,
+    label_col2 = label_col2,
+    drop_na = drop_na
+  )
+
+  if (!nrow(agree_df)) {
+    stop("No labels available to compute agreement.")
+  }
+
+  agree_df <- agree_df |>
+    dplyr::arrange(.data$agreement) |>
+    dplyr::mutate(label = factor(.data$label, levels = .data$label))
+
+  ggplot2::ggplot(agree_df, ggplot2::aes(x = .data$label, y = .data$agreement)) +
+    ggplot2::geom_col(fill = "#3182bd") +
+    ggplot2::geom_text(ggplot2::aes(label = sprintf("n = %d", .data$union_n)),
+                       hjust = -0.1, size = 3) +
+    ggplot2::geom_hline(yintercept = 1, linetype = "dotted", color = "red") +
+    ggplot2::coord_flip() +
+    ggplot2::scale_y_continuous(breaks = seq(0, 1, by = 0.25),
+                                limits = c(0, 1.05),
+                                expand = ggplot2::expansion(mult = c(0, 0.08))) +
+    ggplot2::labs(title = title,
+                  subtitle = subtitle %||% paste0(label_col1, " vs ", label_col2),
+                  x = NULL,
+                  y = "Agreement (match / union)") +
+    ggplot2::theme_classic()
+}
+
+
+#' Plot confusion matrix between two label columns
+#'
+#' Computes a confusion matrix for two label columns in `colData(spe)` and
+#' visualises it with counts overlaid.
+#'
+#' @param spe A `SpatialExperiment`/`SingleCellExperiment`.
+#' @param label_col1 First label column name.
+#' @param label_col2 Second label column name.
+#' @param drop_na Logical; drop rows with NA in either label. Default TRUE.
+#' @param title Plot title.
+#' @param subtitle Optional subtitle; defaults to "label_col1 vs label_col2".
+#' @param fill_low Low-end color for the fill gradient. Default "#f0f9e8".
+#' @param fill_high High-end color for the fill gradient. Default "#08589e".
+#' @param plot_marginals Logical; if TRUE, plot marginal totals on the edges
+#'   (right side and top) of the confusion matrix. Default FALSE.
+#'
+#' @return A `ggplot` object.
+#' @export
+plot_label_confusion_matrix <- function(spe,
+                                        label_col1,
+                                        label_col2,
+                                        drop_na = TRUE,
+                                        title = "Label confusion matrix",
+                                        subtitle = NULL,
+                                        fill_low = "#f0f9e8",
+                                        fill_high = "#08589e",
+                                        plot_marginals = FALSE) {
+
+  .assert_spe(spe)
+
+  conf <- label_confusion_matrix(
+    spe,
+    label_col1 = label_col1,
+    label_col2 = label_col2,
+    drop_na = drop_na
+  )
+
+  subtitle <- subtitle %||% paste0(label_col1, " vs ", label_col2)
+
+  p <- plot_confusion_matrix(
+    conf_mat = conf,
+    title = title,
+    subtitle = subtitle,
+    aggregated = TRUE,
+    fill_low = fill_low,
+    fill_high = fill_high,
+    plot_marginals = plot_marginals
+  )
+
+  p + ggplot2::labs(x = label_col2, y = label_col1)
+}
+
+
+#' Plot marker density across images
+#'
+#' Generates a density plot for a single marker using the specified assay, with
+#' curves colored by the image/sample column. Useful for quick QC of
+#' normalisation steps.
+#'
+#' @param spe A `SpatialExperiment`/`SingleCellExperiment` with the target assay
+#'   and metadata in `colData()`.
+#' @param marker Marker name to plot (must match a row in the assay).
+#' @param assay_name Assay name to pull values from. Default "counts".
+#' @param image_col Column in `colData()` used to color densities. Default
+#'   "image_name".
+#' @param title Optional plot title. Defaults to "Density of {marker} (assay:
+#'   {assay_name})".
+#' @param show_legend Logical; whether to show the legend. Default `FALSE`.
+#'
+#' @return A `ggplot` object.
+#' @export
+plot_marker_density <- function(spe,
+                                marker,
+                                assay_name = "counts",
+                                image_col = "image_name",
+                                title = NULL,
+                                show_legend = FALSE) {
+
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Please install ggplot2 to use plot_marker_density().")
+  }
+
+  .assert_spe(spe)
+
+  if (!assay_name %in% SummarizedExperiment::assayNames(spe)) {
+    stop("Assay '", assay_name, "' not found in spe.")
+  }
+
+  assay_mat <- SummarizedExperiment::assay(spe, assay_name)
+
+  if (is.null(rownames(assay_mat)) || !marker %in% rownames(assay_mat)) {
+    stop("Marker '", marker, "' not found in assay '", assay_name, "'.")
+  }
+
+  meta <- SummarizedExperiment::colData(spe) |> as.data.frame()
+
+  if (!image_col %in% names(meta)) {
+    stop("image_col '", image_col, "' not found in colData(spe).")
+  }
+
+  meta[[marker]] <- as.numeric(assay_mat[marker, , drop = TRUE])
+
+  title <- title %||% paste0("Density of ", marker, " (assay: ", assay_name, ")")
+
+  ggplot2::ggplot(meta, ggplot2::aes(x = .data[[marker]], colour = .data[[image_col]])) +
+    ggplot2::geom_density() +
+    ggplot2::labs(
+      title = title,
+      x = marker,
+      y = "Density",
+      colour = image_col
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(legend.position = if (show_legend) "right" else "none")
+}
+
+
+#' Plot per-class precision, recall, and F1
+#'
+#' Displays grouped bar plots for per-class precision, recall, and F1 with
+#' support annotations. If a `fold` column is present (e.g., cross-validation
+#' results), draws boxplots per class and facets by metric.
+#'
+#' @param class_metrics Data frame with columns `class`, `precision`, `recall`,
+#'   `f1`, optionally `support`, and optionally `fold` for cross-validation.
+#' @param title Plot title.
+#'
+#' @return A `ggplot` object.
+#' @export
+plot_class_metrics <- function(class_metrics, title = "Per-class precision/recall/F1", subtitle = NULL) {
+  if (!requireNamespace("ggplot2", quietly = TRUE) ||
+      !requireNamespace("dplyr", quietly = TRUE) ||
+      !requireNamespace("tidyr", quietly = TRUE)) {
+    stop("Please install ggplot2, dplyr, and tidyr to use plot_class_metrics().")
+  }
+
+  needed <- c("class", "precision", "recall", "f1")
+  missing_cols <- setdiff(needed, names(class_metrics))
+  if (length(missing_cols)) {
+    stop("class_metrics is missing columns: ", paste(missing_cols, collapse = ", "))
+  }
+
+  df <- class_metrics |>
+    dplyr::mutate(class = factor(.data$class)) |>
+    tidyr::pivot_longer(cols = c("precision", "recall", "f1"), names_to = "metric", values_to = "value")
+
+  if (!nrow(df)) stop("class_metrics has no rows to plot.")
+
+  has_folds <- "fold" %in% names(df)
+
+  if (has_folds) {
+    p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$class, y = .data$value, fill = .data$metric)) +
+      ggplot2::geom_boxplot(position = ggplot2::position_dodge(width = 0.8), outlier.shape = 21, alpha = 0.6) +
+      ggplot2::geom_jitter(ggplot2::aes(color = .data$metric),
+                           position = ggplot2::position_jitterdodge(jitter.width = 0.2, dodge.width = 0.8),
+                           alpha = 0.4, size = 1.5, show.legend = FALSE)
+  } else {
+    p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$class, y = .data$value, fill = .data$metric)) +
+      ggplot2::geom_col(position = ggplot2::position_dodge())
+  }
+
+  if ("support" %in% names(class_metrics)) {
+    supports <- class_metrics |>
+      dplyr::select(.data$class, .data$support) |>
+      dplyr::group_by(.data$class) |>
+      dplyr::summarise(support = dplyr::first(.data$support), .groups = "drop") |>
+      dplyr::mutate(class = factor(.data$class, levels = levels(df$class)))
+    p <- p + ggplot2::geom_text(
+      data = supports,
+      ggplot2::aes(x = .data$class, y = 1.05, label = paste0("n = ", .data$support)),
+      inherit.aes = FALSE,
+      vjust = 0,
+      size = 3
+    )
+  }
+
+  total_n <- if ("support" %in% names(class_metrics)) sum(class_metrics$support, na.rm = TRUE) else NA_real_
+  cv_txt <- if (has_folds) paste0("CV folds = ", length(unique(df$fold))) else NULL
+  n_txt <- if (is.finite(total_n)) paste0("n = ", total_n) else NULL
+  subtitle_auto <- paste(na.omit(c(n_txt, cv_txt)), collapse = " | ")
+  subtitle <- subtitle %||% subtitle_auto
+
+  p <- p +
+    ggplot2::labs(title = title, subtitle = subtitle, x = "Class", y = "Score", fill = "Metric") +
+    ggplot2::scale_y_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1), limits = c(0, 1.1), expand = ggplot2::expansion(mult = c(0, 0.02))) +
+    ggplot2::geom_hline(yintercept = 1, linetype = "dotted", color = "red") +
+    ggplot2::theme_classic() +
+    ggplot2::coord_flip()
+
+  p
+}
+
+#' Plot the cell type probabilities of a random sample of cells
+#'
+#' @param spe A spatial experiment object returned by `run_soft_gating()` or `run_tree_gating()` containing cell type probabilities in `colData()`. If omitted, tries `res$spe` when available.
+#' @param image_index Index of the image from which to sample cells. Default 1.
+#' @param sample_size Number of cells to sample (capped at available cells). Default 20.
+#' @param image_col Column in `colData` holding the image IDs. Default "image_name".
+#' @param flag_fn Optional function taking a numeric vector of probabilities for
+#'   a cell and returning a single logical indicating confidence. Defaults to a
+#'   Tukey-style rule matching [custom_labels()].
+#' @param base_thresh Minimum threshold used by the default rule. Default 0.4.
+#' @param quantile_cut Quantile used by the default rule. Default 0.75.
+#' @param iqr_mult IQR multiplier for the default rule. Default 1.5.
+#' @param summary_fun Function that returns a single numeric summary value per
+#'   group (e.g., median or upper whisker). The value is plotted as y/ymin/ymax
+#'   in `stat_summary`. Defaults to the same rule as the confidence flag
+#'   (max(base_thresh, Q3 + iqr_mult * IQR)).
+#'
+#' @return a `ggplot` object
+#' @export
+plot_rand_cell_probs <- function(spe = NULL,
+                                 image_index = 1,
+                                 sample_size = 20,
+                                 image_col = "image_name",
+                                 flag_fn = NULL,
+                                 base_thresh = 0.4,
+                                 quantile_cut = 0.75,
+                                 iqr_mult = 1.5,
+                                 summary_fun = NULL) {
+
+  # Fail fast if required packages are missing
+  if (!requireNamespace("ggplot2", quietly = TRUE) ||
+      !requireNamespace("dplyr", quietly = TRUE) ||
+      !requireNamespace("tidyr", quietly = TRUE)) {
+    stop("Please install ggplot2, dplyr, and tidyr to use plot_rand_cell_probs().")
+  }
+
+  # Allow legacy default via res$spe while keeping an explicit argument path
+  if (is.null(spe)) {
+    res_obj <- get0("res", inherits = TRUE, ifnotfound = NULL)
+    if (!is.null(res_obj) && !is.null(res_obj$spe)) {
+      spe <- res_obj$spe
+    } else {
+      stop("Argument 'spe' is required when res$spe is not available.")
+    }
+  }
+
+  .assert_spe(spe)
+
+  df <- SummarizedExperiment::colData(spe) |> as.data.frame()
+
+  if (!image_col %in% names(df)) {
+    stop("image_col '", image_col, "' not found in colData(spe).")
+  }
+
+  prob_cols <- grep("^P_", names(df), value = TRUE)
+  if (!length(prob_cols)) {
+    stop("No probability columns starting with 'P_' found in colData(spe).")
+  }
+
+  image_values <- unique(stats::na.omit(df[[image_col]]))
+  if (!length(image_values)) {
+    stop("No image IDs found in column '", image_col, "'.")
+  }
+  if (image_index < 1 || image_index > length(image_values)) {
+    stop("image_index must be between 1 and ", length(image_values), ".")
+  }
+
+  selected_image <- image_values[image_index]
+  df <- df[df[[image_col]] == selected_image, , drop = FALSE]
+  if (!nrow(df)) {
+    stop("No cells found for image '", selected_image, "'.")
+  }
+
+  if (!"cell_number" %in% names(df)) {
+    df$cell_number <- seq_len(nrow(df))
+  }
+
+  prob_mat <- as.matrix(df[, prob_cols, drop = FALSE])
+  default_flag <- function(x) {
+    x <- as.numeric(x)
+    x <- x[is.finite(x)]
+    if (!length(x)) return(FALSE)
+    q <- stats::quantile(x, quantile_cut, na.rm = TRUE, names = FALSE)
+    iqr <- stats::IQR(x, na.rm = TRUE)
+    thr <- max(base_thresh, q + iqr_mult * iqr)
+    max(x, na.rm = TRUE) > thr
+  }
+  default_summary_fun <- function(x) {
+    x <- as.numeric(x)
+    x <- x[is.finite(x)]
+    if (!length(x)) return(NA_real_)
+    q <- stats::quantile(x, quantile_cut, na.rm = TRUE, names = FALSE)
+    iqr <- stats::IQR(x, na.rm = TRUE)
+    max(base_thresh, q + iqr_mult * iqr)
+  }
+  flag_fn <- flag_fn %||% default_flag
+  confident <- apply(prob_mat, 1, function(x) {
+    out <- flag_fn(x)
+    if (length(out) != 1 || !is.logical(out)) {
+      stop("flag_fn must return a single logical value per cell.")
+    }
+    isTRUE(out)
+  })
+  df$confident <- confident
+
+  if (sample_size < 1) {
+    stop("sample_size must be >= 1.")
+  }
+  sample_size <- min(sample_size, nrow(df))
+
+  sampled <- df[sample(seq_len(nrow(df)), sample_size), , drop = FALSE]
+
+  summary_fun <- summary_fun %||% default_summary_fun
+  if (!is.function(summary_fun)) {
+    stop("summary_fun must be a function returning a single numeric value.")
+  }
+
+  sampled |>
+    tidyr::pivot_longer(
+      cols = dplyr::all_of(prob_cols),
+      names_to = "Cell_probs",
+      names_prefix = "P_",
+      values_to = "probability"
+    ) |>
+    dplyr::mutate(cell_number = factor(.data$cell_number)) |>
+    ggplot2::ggplot(ggplot2::aes(x = .data$cell_number, y = .data$probability)) +
+    ggplot2::geom_boxplot(ggplot2::aes(fill = NULL)) +
+    ggplot2::geom_point(ggplot2::aes(color = .data$Cell_probs, alpha = .data$confident), size = 1) +
+    ggplot2::scale_alpha_manual(values = c(`TRUE` = 1, `FALSE` = 0.3), guide = "none") +
+    ggplot2::theme_classic() +
+    ggplot2::theme(axis.text.x = ggplot2::element_blank()) +
+    ggplot2::labs(title = "Cell type probabilities",
+                  subtitle = paste0("Image: ", selected_image,
+                                   " | Sampled cells: ", sample_size,
+                                   " | Confident: ", sum(sampled$confident)),
+                  x = "Cell",
+                  y = "Probability") +
+    ggplot2::stat_summary(
+      fun.data = function(x) {
+        val <- summary_fun(x)
+        if (length(val) != 1 || !is.numeric(val) || is.na(val)) {
+          stop("summary_fun must return a single non-NA numeric value.")
+        }
+        data.frame(y = val, ymin = val, ymax = val)
+      },
+      geom = "crossbar",
+      color = "red",
+      width = 0.5
+    )
+}
+
+#' Plot cell-type probability histograms for a single image
+#'
+#' Faceted histograms of per-cell probabilities for each cell type in one
+#' image, using the probability columns already stored in `colData(spe)`
+#' (e.g., `P_T_cell`, `P_Tumor`).
+#'
+#' @param res Result list containing an `spe` element with probability columns.
+#' @param image_index Which image to plot; numeric index or image ID string. Default NULL
+#'   means aggregate all images together.
+#' @param image_col Column name in `colData(spe)` holding image IDs. Default "image_name".
+#' @param prob_prefix Prefix used for probability columns in `colData(spe)`. Default "P_".
+#' @param binwidth Histogram bin width. Default 0.01.
+#' @param drop_na Logical; drop NA probabilities before plotting. Default TRUE.
+#' @param cutoff_fn Function taking a numeric vector of probabilities for a cell type and
+#'   returning a single numeric cutoff to draw. Default [prob_quantile_cutoff()], which uses
+#'   the 0.98 quantile.
+#'
+#' @return A `ggplot` object with faceted histograms.
+#' @export
+plot_prob_hist <- function(res,
+                           image_index = NULL,
+                           image_col = "image_name",
+                           prob_prefix = "P_",
+                           binwidth = 0.01,
+                           drop_na = TRUE,
+                           cutoff_fn = prob_quantile_cutoff) {
+
+  if (!requireNamespace("ggplot2", quietly = TRUE) ||
+      !requireNamespace("dplyr", quietly = TRUE) ||
+      !requireNamespace("tidyr", quietly = TRUE)) {
+    stop("Please install ggplot2, dplyr, and tidyr to use plot_prob_hist().")
+  }
+
+  if (is.null(res) || is.null(res$spe)) {
+    stop("Argument 'res' must contain an 'spe' element with probabilities in colData().")
+  }
+
+  spe <- res$spe
+
+  .assert_spe(spe)
+
+  meta <- SummarizedExperiment::colData(spe) |> as.data.frame()
+
+  if (!"cell_id" %in% names(meta)) {
+    meta$cell_id <- rownames(meta)
+  }
+
+  if (!image_col %in% names(meta)) {
+    stop("image_col '", image_col, "' not found in colData(spe).")
+  }
+
+  prob_cols <- names(meta)[startsWith(names(meta), prob_prefix)]
+  if (!length(prob_cols)) {
+    stop("No probability columns starting with '", prob_prefix, "' found in colData(spe).")
+  }
+
+  meta_needed <- meta[, unique(c("cell_id", image_col, prob_cols)), drop = FALSE]
+
+  image_values <- unique(stats::na.omit(meta_needed[[image_col]]))
+  if (!length(image_values)) {
+    stop("No image IDs found in column '", image_col, "'.")
+  }
+
+  if (!is.null(image_index)) {
+    if (is.character(image_index)) {
+      if (!image_index %in% image_values) {
+        stop("image_index '", image_index, "' not found. Available examples: ",
+             paste(utils::head(image_values, 5), collapse = ", "))
+      }
+      selected_image <- image_index
+    } else {
+      if (!is.numeric(image_index) || length(image_index) != 1L || is.na(image_index)) {
+        stop("image_index must be a single numeric index or a character image ID.")
+      }
+      image_index <- as.integer(image_index)
+      if (image_index < 1 || image_index > length(image_values)) {
+        stop("image_index must be between 1 and ", length(image_values), ".")
+      }
+      selected_image <- image_values[image_index]
+    }
+    plot_data <- meta_needed |>
+      dplyr::filter(.data[[image_col]] == selected_image)
+    if (!nrow(plot_data)) {
+      stop("No cells found for image '", selected_image, "'.")
+    }
+    subtitle_txt <- paste0("Image: ", selected_image,
+                           " | n cells: ", length(unique(plot_data$cell_id)))
+  } else {
+    plot_data <- meta_needed
+    subtitle_txt <- paste0("All images | n cells: ", length(unique(plot_data$cell_id)))
+  }
+
+  plot_long <- plot_data |>
+    tidyr::pivot_longer(
+      cols = dplyr::all_of(prob_cols),
+      names_to = "cell_type",
+      names_prefix = prob_prefix,
+      values_to = "probability"
+    )
+
+  if (drop_na) {
+    plot_long <- dplyr::filter(plot_long, !is.na(.data$probability))
+  }
+
+  if (!nrow(plot_long)) {
+    stop("No probability values available to plot after filtering.")
+  }
+
+  if (!is.function(cutoff_fn)) {
+    stop("cutoff_fn must be a function returning a single numeric cutoff per cell type.")
+  }
+
+  cutoff_df <- plot_long |>
+    dplyr::group_by(.data$cell_type) |>
+    dplyr::summarise(
+      cutoff = {
+        val <- cutoff_fn(.data$probability)
+        if (length(val) != 1 || !is.numeric(val)) {
+          stop("cutoff_fn must return a single numeric value per cell type.")
+        }
+        as.numeric(val)
+      },
+      .groups = "drop"
+    ) |>
+    dplyr::filter(is.finite(.data$cutoff))
+
+  ggplot2::ggplot(plot_long, ggplot2::aes(x = .data$probability)) +
+    ggplot2::geom_histogram(binwidth = binwidth, alpha = 0.5, boundary = 0) +
+    {if (nrow(cutoff_df)) ggplot2::geom_vline(data = cutoff_df, ggplot2::aes(xintercept = .data$cutoff),
+                                              color = "red") else NULL} +
+    ggplot2::facet_wrap(~.data$cell_type, scales = "free_y", axes = "all") +
+    ggplot2::theme_classic() +
+    ggplot2::labs(title = "Histograms of Probability for Each Cell Type",
+                  subtitle = subtitle_txt,
+                  x = "Probability",
+                  y = "Count") +
+    ggplot2::theme(
+      strip.background = ggplot2::element_blank(),
+      strip.text = ggplot2::element_text(face = "bold")
+    )
+}
+
+#' Barplot of positive label counts per cell
+#'
+#' Given a logical/boolean label matrix (cells x cell types), counts how many
+#' labels are positive for each cell and plots the distribution from 0 up to
+#' the maximum observed positives.
+#'
+#' @param label_mat Logical or numeric matrix with cells in rows and cell types
+#'   in columns.
+#' @param title Plot title. Default "Positive labels per cell".
+#' @param xlab X-axis label. Default "Number of positive labels".
+#' @param ylab Y-axis label. Default "Cell count".
+#'
+#' @return A `ggplot` object showing counts per cardinality.
+#' @export
+plot_label_cardinality <- function(label_mat,
+                                   title = "Positive labels per cell",
+                                   xlab = "Number of positive labels",
+                                   ylab = "Cell count") {
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Please install ggplot2 to use plot_label_cardinality().")
+  }
+
+  if (!is.matrix(label_mat)) stop("label_mat must be a matrix.")
+  if (nrow(label_mat) == 0 || ncol(label_mat) == 0) {
+    stop("label_mat must have at least one row and one column.")
+  }
+
+  # Convert to logical; treat non-finite as FALSE
+  vals <- label_mat
+  vals[!is.finite(vals)] <- 0
+  vals <- vals != 0
+
+  k <- rowSums(vals, na.rm = TRUE)
+  if (!length(k)) stop("No rows available to summarize.")
+
+  max_k <- max(k)
+  k_vals <- 0:max_k
+  counts <- tabulate(k + 1L, nbins = max_k + 1L)
+  df <- data.frame(k = k_vals, n = counts)
+
+  ggplot2::ggplot(df, ggplot2::aes(x = .data$k, y = .data$n)) +
+    ggplot2::geom_col(fill = "steelblue") +
+    ggplot2::scale_x_continuous(breaks = k_vals) +
+    ggplot2::labs(title = title, x = xlab, y = ylab) +
+    ggplot2::theme_classic()
+}
+
+#' Plots the spatial arrangement of classified cells
+#'
+#' Takes cell labels and coordinates from a SpatialExperiment; can plot a single
+#' image or facet over multiple images with points colored by the provided
+#' label column.
+#'
+#' @param spe SpatialExperiment object.
+#' @param col_label Column in `colData(spe)` containing cell labels to color by.
+#' @param image_index Index (or name) of the image(s) to view. Can be a single
+#'   numeric, a numeric vector, or character vector of image IDs. Default 1.
+#' @param image_col Column in `colData(spe)` containing image IDs. Default "imageID".
+#' @param x_col Optional x-coordinate column in `colData(spe)`; auto-detected from
+#'   `spatialCoords(spe)` when available.
+#' @param y_col Optional y-coordinate column in `colData(spe)`; auto-detected from
+#'   `spatialCoords(spe)` when available.
+#' @param point_size Point size. Default 0.8.
+#' @param facet Logical; if TRUE, facet over selected images. If FALSE, plot a
+#'   single image (first selected). Default TRUE.
+#'
+#' @return `ggplot` object
+#' @export
+plot_labelled_cells <- function(spe,
+                                col_label,
+                                image_index = 1,
+                                image_col = "imageID",
+                                x_col = NULL,
+                                y_col = NULL,
+                                point_size = 0.8,
+                                facet = TRUE) {
+
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Please install ggplot2 to use plot_labelled_cells().")
+  }
+
+  .assert_spe(spe)
+
+  df <- SummarizedExperiment::colData(spe) |> as.data.frame()
+
+  if (is.null(col_label) || !col_label %in% names(df)) {
+    stop("col_label '", col_label, "' not found in colData(spe).")
+  }
+  if (!image_col %in% names(df)) {
+    stop("image_col '", image_col, "' not found in colData(spe).")
+  }
+
+  coords <- tryCatch(SpatialExperiment::spatialCoords(spe), error = function(e) NULL)
+  if (!is.null(coords)) {
+    df$x <- coords[, 1]
+    df$y <- coords[, 2]
+    if (is.null(x_col)) x_col <- "x"
+    if (is.null(y_col)) y_col <- "y"
+  }
+
+  if (is.null(x_col) || is.null(y_col) || !all(c(x_col, y_col) %in% names(df))) {
+    stop("Could not determine x/y coordinates. Please specify x_col and y_col.")
+  }
+
+  image_values <- unique(stats::na.omit(df[[image_col]]))
+  if (!length(image_values)) {
+    stop("No image IDs found in column '", image_col, "'.")
+  }
+
+  if (is.character(image_index)) {
+    missing_imgs <- setdiff(image_index, image_values)
+    if (length(missing_imgs)) {
+      stop("image_index contains unknown image IDs: ", paste(missing_imgs, collapse = ", "))
+    }
+    selected_images <- image_index
+  } else {
+    if (!is.numeric(image_index) || any(is.na(image_index))) {
+      stop("image_index must be numeric indices or character image IDs.")
+    }
+    image_index <- as.integer(image_index)
+    if (any(image_index < 1L | image_index > length(image_values))) {
+      stop("image_index values must be between 1 and ", length(image_values), ".")
+    }
+    selected_images <- image_values[image_index]
+  }
+
+  df_img <- df[df[[image_col]] %in% selected_images & !is.na(df[[image_col]]), , drop = FALSE]
+  if (!nrow(df_img)) {
+    stop("No cells found for the selected image(s).")
+  }
+
+  p <- ggplot2::ggplot(
+    df_img,
+    ggplot2::aes(
+      x = .data[[x_col]],
+      y = .data[[y_col]],
+      color = .data[[col_label]]
+    )
+  ) +
+    ggplot2::geom_point(size = point_size, alpha = 0.8) +
+    ggplot2::coord_fixed() +
+    ggplot2::theme_minimal() +
+    ggplot2::labs(
+      title = "Spatial map of labelled cells",
+      subtitle = if (facet) "Faceted by image" else paste0("Image: ", selected_images[1]),
+      color = col_label,
+      x = x_col,
+      y = y_col
+    )
+
+  if (facet && length(selected_images) > 1L) {
+    p <- p + ggplot2::facet_wrap(stats::as.formula(paste("~", image_col)))
+  }
+
+  p
+}
+
+
+#' Plot label comparison dotplot
+#'
+#' Creates a dotplot comparing cell type distributions across multiple label
+#' columns. The y-axis shows all unique cell types found across the specified
+#' label columns (excluding Unknown/NA), x-axis shows counts, and points are
+#' colored by which label column they came from.
+#'
+#' @param spe A `SpatialExperiment`/`SingleCellExperiment`.
+#' @param label_cols Character vector of column names in `colData(spe)` to compare.
+#'   Each column should contain cell type labels.
+#' @param title Plot title.
+#' @param subtitle Optional subtitle.
+#' @param drop_unknown Logical; if TRUE, exclude "Unknown" from cell types. Default TRUE.
+#' @param drop_na Logical; if TRUE, drop NA values. Default TRUE.
+#' @param point_size Size of points. Default 4.
+#' @param show_legend Logical; show legend. Default TRUE.
+#'
+#' @return A `ggplot` object.
+#' @export
+plot_label_dotplot <- function(spe,
+                               label_cols,
+                               title = "Label comparison",
+                               subtitle = NULL,
+                               drop_unknown = TRUE,
+                               drop_na = TRUE,
+                               point_size = 4,
+                               show_legend = TRUE) {
+
+  if (!requireNamespace("ggplot2", quietly = TRUE) ||
+      !requireNamespace("dplyr", quietly = TRUE) ||
+      !requireNamespace("tidyr", quietly = TRUE)) {
+    stop("Please install ggplot2, dplyr, and tidyr to use plot_label_dotplot().")
+  }
+
+  .assert_spe(spe)
+
+  if (length(label_cols) == 0) {
+    stop("label_cols must contain at least one column name.")
+  }
+
+  df <- SummarizedExperiment::colData(spe) |> as.data.frame()
+
+  missing_cols <- setdiff(label_cols, names(df))
+  if (length(missing_cols)) {
+    stop("Columns not found in colData(spe): ", paste(missing_cols, collapse = ", "))
+  }
+
+  # Gather counts from each label column
+  count_list <- lapply(label_cols, function(col) {
+    vals <- df[[col]]
+    vals <- as.character(vals)
+
+    if (drop_na) {
+      vals <- vals[!is.na(vals)]
+    }
+
+    if (drop_unknown) {
+      vals <- vals[vals != "Unknown"]
+    }
+
+    if (length(vals) == 0) return(NULL)
+
+    counts <- table(vals)
+    data.frame(
+      cell_type = names(counts),
+      total_count = as.numeric(counts),
+      label_source = col,
+      stringsAsFactors = FALSE
+    )
+  })
+
+  count_df <- dplyr::bind_rows(count_list)
+
+  if (!nrow(count_df)) {
+    stop("No data available after filtering.")
+  }
+
+  # Order cell types by total counts across all sources
+  cell_type_order <- count_df |>
+    dplyr::group_by(.data$cell_type) |>
+    dplyr::summarise(total = sum(.data$total_count), .groups = "drop") |>
+    dplyr::arrange(.data$total) |>
+    dplyr::pull(.data$cell_type)
+
+  count_df$cell_type <- factor(count_df$cell_type, levels = cell_type_order)
+
+  subtitle <- subtitle %||% paste0("Comparing ", length(label_cols), " label columns")
+
+  ggplot2::ggplot(count_df, ggplot2::aes(x = .data$total_count, 
+                                          y = .data$cell_type, 
+                                          color = .data$label_source)) +
+    ggplot2::geom_point(size = point_size, alpha = 0.8) +
+    ggplot2::labs(
+      title = title,
+      subtitle = subtitle,
+      x = "Total count",
+      y = "Cell type",
+      color = "Label source"
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      legend.position = if (show_legend) "right" else "none",
+      axis.text.y = ggplot2::element_text(size = 10)
+    )
+}
+
+#' Plot pseudobulk marker heatmap
+#'
+#' Computes mean marker expression per label group and plots a heatmap
+#' restricted to relevant markers defined in a lineage table.
+#'
+#' @param spe A `SpatialExperiment`/`SingleCellExperiment`.
+#' @param label_col Column in `colData(spe)` containing labels.
+#' @param lineage_table Tibble with cell_type/pos_markers/neg_markers.
+#' @param assay_name Assay name to pull values from. Default "norm".
+#' @param cell_types Optional character vector to restrict label groups.
+#' @param marker_groups Which marker sets to include from lineage_table.
+#'   Default `c("pos_markers", "neg_markers")`.
+#' @param drop_unknown Logical; drop "Unknown" labels. Default TRUE.
+#' @param drop_na Logical; drop NA labels. Default TRUE.
+#' @param cluster_rows Logical; if TRUE, cluster labels (rows). Default FALSE.
+#' @param cluster_cols Logical; if TRUE, cluster markers (cols). Default FALSE.
+#' @param show_values Logical; draw mean values on tiles. Default TRUE.
+#' @param value_digits Digits for tile labels. Default 2.
+#' @param title Plot title. Default "Pseudobulk marker expression".
+#'
+#' @return A `ggplot` object.
+#' @export
+plot_pseudobulk_heatmap <- function(spe,
+                                    label_col,
+                                    lineage_table,
+                                    assay_name = "norm",
+                                    cell_types = NULL,
+                                    marker_groups = c("pos_markers", "neg_markers"),
+                                    drop_unknown = TRUE,
+                                    drop_na = TRUE,
+                                    cluster_rows = FALSE,
+                                    cluster_cols = FALSE,
+                                    show_values = TRUE,
+                                    value_digits = 2,
+                                    title = "Pseudobulk marker expression") {
+
+  if (!requireNamespace("ggplot2", quietly = TRUE) ||
+      !requireNamespace("dplyr", quietly = TRUE) ||
+      !requireNamespace("tidyr", quietly = TRUE)) {
+    stop("Please install ggplot2, dplyr, and tidyr to use plot_pseudobulk_heatmap().")
+  }
+
+  .assert_spe(spe)
+  .assert_lineage_table(lineage_table)
+
+  if (!assay_name %in% SummarizedExperiment::assayNames(spe)) {
+    stop("Assay '", assay_name, "' not found in spe.")
+  }
+
+  meta <- SummarizedExperiment::colData(spe) |> as.data.frame()
+  if (is.null(label_col) || !label_col %in% names(meta)) {
+    stop("label_col '", label_col, "' not found in colData(spe).")
+  }
+
+  labels_raw <- meta[[label_col]]
+  labels_raw <- as.character(labels_raw)
+
+  keep <- rep(TRUE, length(labels_raw))
+  if (drop_na) {
+    keep <- keep & !is.na(labels_raw)
+  }
+  if (drop_unknown) {
+    keep <- keep & labels_raw != "Unknown"
+  }
+  if (!is.null(cell_types)) {
+    keep <- keep & labels_raw %in% cell_types
+  }
+
+  labels <- labels_raw[keep]
+
+  if (!length(labels)) {
+    stop("No labels available after filtering.")
+  }
+
+  missing_groups <- setdiff(marker_groups, c("pos_markers", "neg_markers"))
+  if (length(missing_groups)) {
+    stop("marker_groups must be any of: pos_markers, neg_markers.")
+  }
+
+  lineage_filtered <- lineage_table |>
+    dplyr::filter(.data$cell_type %in% unique(labels))
+
+  if (!nrow(lineage_filtered)) {
+    stop("No matching cell types found in lineage_table for selected labels.")
+  }
+
+  marker_list <- lineage_filtered[, marker_groups, drop = FALSE] |>
+    unlist(recursive = TRUE, use.names = FALSE)
+  marker_list <- unique(marker_list)
+
+  if (!length(marker_list)) {
+    stop("No markers found in lineage_table for the selected marker_groups.")
+  }
+
+  assay_mat <- SummarizedExperiment::assay(spe, assay_name)
+  if (is.null(rownames(assay_mat))) {
+    stop("Assay has no rownames; cannot match markers.")
+  }
+
+  marker_list <- intersect(marker_list, rownames(assay_mat))
+  if (!length(marker_list)) {
+    stop("No lineage markers found in assay rows for assay '", assay_name, "'.")
+  }
+
+  assay_mat <- assay_mat[marker_list, keep, drop = FALSE]
+  df <- t(assay_mat) |> as.data.frame()
+  df[[label_col]] <- labels
+
+  summary_df <- df |>
+    dplyr::group_by(.data[[label_col]]) |>
+    dplyr::summarise(
+      dplyr::across(dplyr::where(is.numeric), mean, na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  # Determine ordering for rows/cols
+  label_levels <- summary_df[[label_col]]
+  marker_levels <- setdiff(names(summary_df), label_col)
+
+  mat <- as.matrix(summary_df[, marker_levels, drop = FALSE])
+  rownames(mat) <- summary_df[[label_col]]
+
+  if (cluster_rows && nrow(mat) > 1) {
+    row_order <- rownames(mat)[stats::hclust(stats::dist(mat))$order]
+  } else {
+    row_order <- label_levels
+  }
+
+  if (cluster_cols && ncol(mat) > 1) {
+    col_order <- colnames(mat)[stats::hclust(stats::dist(t(mat)))$order]
+  } else {
+    col_order <- marker_levels
+  }
+
+  plot_df <- summary_df |>
+    tidyr::pivot_longer(
+      cols = -dplyr::all_of(label_col),
+      names_to = "marker",
+      values_to = "expression"
+    ) |>
+    dplyr::mutate(
+      marker = factor(.data$marker, levels = col_order),
+      label = factor(.data[[label_col]], levels = row_order)
+    )
+
+  p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = .data$marker, y = .data$label, fill = .data$expression)) +
+    ggplot2::geom_tile(color = "white", linewidth = 0.35) +
+    ggplot2::coord_fixed() +
+    ggplot2::scale_fill_distiller(palette = "YlGnBu", direction = 1, na.value = "#f5f5f5") +
+    ggplot2::labs(title = title,
+                  x = "Marker",
+                  y = label_col,
+                  fill = "Mean expr") +
+    ggplot2::theme_minimal(base_size = 12) +
+    ggplot2::theme(
+      panel.grid = ggplot2::element_blank(),
+      plot.title = ggplot2::element_text(face = "bold", size = 14, hjust = 0),
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1),
+      axis.title.y = ggplot2::element_text(margin = ggplot2::margin(r = 6)),
+      axis.title.x = ggplot2::element_text(margin = ggplot2::margin(t = 6)),
+      legend.position = "right",
+      legend.title = ggplot2::element_text(face = "bold"),
+      legend.key.height = ggplot2::unit(0.8, "cm")
+    )
+
+  if (show_values) {
+    p <- p + ggplot2::geom_text(ggplot2::aes(label = round(.data$expression, value_digits)),
+                                size = 2.5,
+                                color = "#1a1a1a",
+                                fontface = "bold")
+  }
+
+  p
 }

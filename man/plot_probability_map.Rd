@@ -8,6 +8,7 @@ plot_probability_map(
   spe,
   cell_type,
   image_col = "imageID",
+  image_index = NULL,
   x_col = NULL,
   y_col = NULL,
   point_size = 0.8
@@ -19,6 +20,9 @@ plot_probability_map(
 \item{cell_type}{Character. Must match the lineage_table$cell_type used in run_soft_gating().}
 
 \item{image_col}{Column name for image ID (default "imageID").}
+
+\item{image_index}{Numeric indices or character IDs of images to plot. Defaults
+to all images. If length > 1, results are faceted by image.}
 
 \item{x_col}{Coordinate column names (default auto-detect).}
 
