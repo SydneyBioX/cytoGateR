@@ -1,6 +1,6 @@
 Package: cytoGateR
 Type: Package
-Title: An R package for cell type annotation in low-marker protein imaging data (e.g., IMC and CODEX) using marker-aware gating and classification strategies.
+Title: Marker-Aware Cell Type Annotation for Protein Imaging Data
 Version: 0.1.0
 Authors@R: c(
     person("Matthew", "Li",
@@ -16,8 +16,8 @@ Authors@R: c(
            email = "yulj2010@gmail.com",
            role = c("aut", "cre")
            ))
-Description: annotate cell-type for IMC data.
-License: GPL (>= 3)
+Description: An R package for cell type annotation in low-marker protein imaging data (e.g., IMC and CODEX) using marker-aware gating and classification strategies.
+License: GPL (>= 2)
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.3.3
