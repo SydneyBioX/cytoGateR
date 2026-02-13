@@ -1029,6 +1029,12 @@ plot_label_cardinality <- function(label_mat,
 #' @param y_col Optional y-coordinate column in `colData(spe)`; auto-detected from
 #'   `spatialCoords(spe)` when available.
 #' @param point_size Point size. Default 0.8.
+#' @param label_levels Optional character vector of label levels to enforce for
+#'   legend consistency. If provided, labels are coerced to a factor with these levels.
+#' @param label_colors Optional named or unnamed vector of colors to use for the
+#'   label levels. If provided alongside `label_levels`, lengths must match.
+#' @param drop_levels Logical; if FALSE, keep unused levels in the legend.
+#'   Default FALSE.
 #' @param facet Logical; if TRUE, facet over selected images. If FALSE, plot a
 #'   single image (first selected). Default TRUE.
 #'
@@ -1041,6 +1047,9 @@ plot_labelled_cells <- function(spe,
                                 x_col = NULL,
                                 y_col = NULL,
                                 point_size = 0.8,
+                                label_levels = NULL,
+                                label_colors = NULL,
+                                drop_levels = FALSE,
                                 facet = TRUE) {
 
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
@@ -1087,7 +1096,8 @@ plot_labelled_cells <- function(spe,
     }
     image_index <- as.integer(image_index)
     if (any(image_index < 1L | image_index > length(image_values))) {
-      stop("image_index values must be between 1 and ", length(image_values), ".")
+      return(ggplot() + theme_void()) # return empty plot
+      # stop("image_index values must be between 1 and ", length(image_values), ".")
     }
     selected_images <- image_values[image_index]
   }
@@ -1095,6 +1105,31 @@ plot_labelled_cells <- function(spe,
   df_img <- df[df[[image_col]] %in% selected_images & !is.na(df[[image_col]]), , drop = FALSE]
   if (!nrow(df_img)) {
     stop("No cells found for the selected image(s).")
+  }
+
+  label_levels_data <- df_img[[col_label]]
+  label_levels_data <- if (is.factor(label_levels_data)) levels(label_levels_data) else unique(as.character(label_levels_data))
+
+  if (!is.null(label_levels)) {
+    label_levels <- as.character(label_levels)
+    df_img[[col_label]] <- factor(df_img[[col_label]], levels = label_levels)
+  }
+
+  label_levels_use <- label_levels %||% label_levels_data
+
+  if (is.null(label_colors)) {
+    if (!requireNamespace("pals", quietly = TRUE)) {
+      stop("Please install pals to use the default high-contrast palette in plot_labelled_cells().")
+    }
+    label_colors <- as.vector(pals::polychrome(length(label_levels_use)))
+    names(label_colors) <- label_levels_use
+  } else {
+    if (length(label_colors) != length(label_levels_use)) {
+      stop("label_colors must be the same length as the label levels when provided.")
+    }
+    if (is.null(names(label_colors))) {
+      names(label_colors) <- label_levels_use
+    }
   }
 
   p <- ggplot2::ggplot(
@@ -1119,6 +1154,9 @@ plot_labelled_cells <- function(spe,
   if (facet && length(selected_images) > 1L) {
     p <- p + ggplot2::facet_wrap(stats::as.formula(paste("~", image_col)))
   }
+
+  p <- p + ggplot2::scale_color_manual(values = label_colors, drop = drop_levels, limits = label_levels_use) +
+        guides(color = guide_legend(override.aes = list(size = 5)))
 
   p
 }
@@ -1212,22 +1250,27 @@ plot_label_dotplot <- function(spe,
 
   subtitle <- subtitle %||% paste0("Comparing ", length(label_cols), " label columns")
 
-  ggplot2::ggplot(count_df, ggplot2::aes(x = .data$total_count, 
-                                          y = .data$cell_type, 
-                                          color = .data$label_source)) +
-    ggplot2::geom_point(size = point_size, alpha = 0.8) +
+  ggplot2::ggplot(count_df, ggplot2::aes(x = .data$total_count,
+                                        y = .data$cell_type,
+                                        color = .data$label_source,
+                                        shape = .data$label_source)) +
+    ggplot2::geom_point(size = point_size, alpha = 0.5) +
     ggplot2::labs(
       title = title,
       subtitle = subtitle,
-      x = "Total count",
+      x = "Total count (log10)",
       y = "Cell type",
-      color = "Label source"
+      color = "Label source",
+      shape = "Label source"
     ) +
     ggplot2::theme_minimal() +
     ggplot2::theme(
       legend.position = if (show_legend) "right" else "none",
       axis.text.y = ggplot2::element_text(size = 10)
-    )
+    ) +
+    ggplot2::scale_x_log10() +
+    ggplot2::scale_color_brewer(palette = "Set1", name = "Label source") +
+    ggplot2::scale_shape_discrete(name = "Label source")
 }
 
 #' Plot pseudobulk marker heatmap
@@ -1242,10 +1285,26 @@ plot_label_dotplot <- function(spe,
 #' @param cell_types Optional character vector to restrict label groups.
 #' @param marker_groups Which marker sets to include from lineage_table.
 #'   Default `c("pos_markers", "neg_markers")`.
+#' @param include_all_markers Logical; if TRUE, use all assay markers rather than
+#'   only lineage_table markers. Default TRUE.
 #' @param drop_unknown Logical; drop "Unknown" labels. Default TRUE.
 #' @param drop_na Logical; drop NA labels. Default TRUE.
-#' @param cluster_rows Logical; if TRUE, cluster labels (rows). Default FALSE.
-#' @param cluster_cols Logical; if TRUE, cluster markers (cols). Default FALSE.
+#' @param cluster_rows Logical; if TRUE, cluster markers (rows). Default FALSE.
+#' @param cluster_cols Logical; if TRUE, cluster labels (cols). Default FALSE.
+#' @param scale Scaling for the heatmap. One of "none", "row", or "column".
+#'   Default "none".
+#' @param row_order Optional character vector of marker names to enforce when
+#'   `cluster_rows = FALSE`. Any missing markers are ignored; any remaining markers
+#'   not listed are appended in their existing order.
+#' @param col_order Optional character vector of label names to enforce when
+#'   `cluster_cols = FALSE`. Any missing labels are ignored; any remaining labels
+#'   not listed are appended in their existing order.
+#' @param highlight_lineage Logical; draw outlines for lineage markers per
+#'   cell type. Positive markers are green, negative markers are red. Default FALSE.
+#' @param heatmap_palette Palette name for the heatmap. Default "RdYlBu" for a
+#'   blue-yellow-red diverging scale (pheatmap style). Set to a viridis option
+#'   (e.g., "viridis", "magma") to use `ggplot2::scale_fill_viridis_c()`.
+#' @param heatmap_direction Direction for viridis palettes. Default 1.
 #' @param show_values Logical; draw mean values on tiles. Default TRUE.
 #' @param value_digits Digits for tile labels. Default 2.
 #' @param title Plot title. Default "Pseudobulk marker expression".
@@ -1254,22 +1313,31 @@ plot_label_dotplot <- function(spe,
 #' @export
 plot_pseudobulk_heatmap <- function(spe,
                                     label_col,
-                                    lineage_table,
+                                    lineage_table = NULL,
                                     assay_name = "norm",
                                     cell_types = NULL,
                                     marker_groups = c("pos_markers", "neg_markers"),
+                                    include_all_markers = TRUE,
                                     drop_unknown = TRUE,
                                     drop_na = TRUE,
                                     cluster_rows = FALSE,
                                     cluster_cols = FALSE,
                                     show_values = TRUE,
                                     value_digits = 2,
-                                    title = "Pseudobulk marker expression") {
+                                    title = "Pseudobulk marker expression",
+                                    scale = "none",
+                                    row_order = NULL,
+                                    col_order = NULL,
+                                    highlight_lineage = TRUE,
+                                    heatmap_palette = "RdYlBu",
+                                    heatmap_direction = 1,
+                                    text_size = 2.5) {
 
   if (!requireNamespace("ggplot2", quietly = TRUE) ||
       !requireNamespace("dplyr", quietly = TRUE) ||
-      !requireNamespace("tidyr", quietly = TRUE)) {
-    stop("Please install ggplot2, dplyr, and tidyr to use plot_pseudobulk_heatmap().")
+      !requireNamespace("tidyr", quietly = TRUE) ||
+      !requireNamespace("RColorBrewer", quietly = TRUE)) {
+    stop("Please install ggplot2, dplyr, tidyr, and RColorBrewer to use plot_pseudobulk_heatmap().")
   }
 
   .assert_spe(spe)
@@ -1316,22 +1384,26 @@ plot_pseudobulk_heatmap <- function(spe,
     stop("No matching cell types found in lineage_table for selected labels.")
   }
 
-  marker_list <- lineage_filtered[, marker_groups, drop = FALSE] |>
-    unlist(recursive = TRUE, use.names = FALSE)
-  marker_list <- unique(marker_list)
-
-  if (!length(marker_list)) {
-    stop("No markers found in lineage_table for the selected marker_groups.")
-  }
-
   assay_mat <- SummarizedExperiment::assay(spe, assay_name)
   if (is.null(rownames(assay_mat))) {
     stop("Assay has no rownames; cannot match markers.")
   }
 
-  marker_list <- intersect(marker_list, rownames(assay_mat))
-  if (!length(marker_list)) {
-    stop("No lineage markers found in assay rows for assay '", assay_name, "'.")
+  if (include_all_markers) {
+    marker_list <- rownames(assay_mat)
+  } else {
+    marker_list <- lineage_filtered[, marker_groups, drop = FALSE] |>
+      unlist(recursive = TRUE, use.names = FALSE)
+    marker_list <- unique(marker_list)
+
+    if (!length(marker_list)) {
+      stop("No markers found in lineage_table for the selected marker_groups.")
+    }
+
+    marker_list <- intersect(marker_list, rownames(assay_mat))
+    if (!length(marker_list)) {
+      stop("No lineage markers found in assay rows for assay '", assay_name, "'.")
+    }
   }
 
   assay_mat <- assay_mat[marker_list, keep, drop = FALSE]
@@ -1351,38 +1423,145 @@ plot_pseudobulk_heatmap <- function(spe,
 
   mat <- as.matrix(summary_df[, marker_levels, drop = FALSE])
   rownames(mat) <- summary_df[[label_col]]
+  mat <- t(mat)
+  rownames(mat) <- marker_levels
+  colnames(mat) <- label_levels
+
+  scale <- match.arg(scale, c("none", "row", "column"))
+
+  apply_order <- function(order_vec, existing) {
+    order_vec <- unique(order_vec)
+    ordered <- intersect(order_vec, existing)
+    remaining <- setdiff(existing, ordered)
+    c(ordered, remaining)
+  }
 
   if (cluster_rows && nrow(mat) > 1) {
     row_order <- rownames(mat)[stats::hclust(stats::dist(mat))$order]
+  } else if (!is.null(row_order)) {
+    if (!is.character(row_order)) {
+      stop("row_order must be a character vector of marker names.")
+    }
+    row_order <- apply_order(row_order, rownames(mat))
   } else {
-    row_order <- label_levels
+    row_order <- marker_levels
   }
 
   if (cluster_cols && ncol(mat) > 1) {
     col_order <- colnames(mat)[stats::hclust(stats::dist(t(mat)))$order]
+  } else if (!is.null(col_order)) {
+    if (!is.character(col_order)) {
+      stop("col_order must be a character vector of label names.")
+    }
+    col_order <- apply_order(col_order, colnames(mat))
   } else {
-    col_order <- marker_levels
+    col_order <- label_levels
   }
 
-  plot_df <- summary_df |>
+  mat <- mat[row_order, col_order, drop = FALSE]
+
+  zscore <- function(x) {
+    mu <- mean(x, na.rm = TRUE)
+    sigma <- stats::sd(x, na.rm = TRUE)
+    if (!is.finite(sigma) || sigma == 0) {
+      return(setNames(rep(0, length(x)), names(x)))
+    }
+    (x - mu) / sigma
+  }
+
+  if (scale != "none") {
+    if (scale == "row") {
+      mat <- t(apply(mat, 1, zscore))
+    } else {
+      mat <- apply(mat, 2, zscore)
+    }
+    mat <- as.matrix(mat)
+    mat[is.na(mat)] <- 0
+  }
+
+  fill_label <- if (scale == "none") "Mean expr" else paste0("Scaled mean expr (", scale, ")")
+
+  plot_df <- as.data.frame(mat) |>
+    cbind(marker = rownames(mat)) |>
     tidyr::pivot_longer(
-      cols = -dplyr::all_of(label_col),
-      names_to = "marker",
+      cols = -dplyr::all_of("marker"),
+      names_to = "label",
       values_to = "expression"
     ) |>
     dplyr::mutate(
-      marker = factor(.data$marker, levels = col_order),
-      label = factor(.data[[label_col]], levels = row_order)
+      marker = factor(.data$marker, levels = row_order),
+      label = factor(.data$label, levels = col_order)
     )
 
-  p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = .data$marker, y = .data$label, fill = .data$expression)) +
+  highlight_df <- NULL
+  if (highlight_lineage) {
+    extract_markers <- function(x) {
+      unique(stats::na.omit(unlist(x, use.names = FALSE)))
+    }
+
+    pos_map <- lineage_filtered |>
+      dplyr::select(.data$cell_type, .data$pos_markers)
+    neg_map <- lineage_filtered |>
+      dplyr::select(.data$cell_type, .data$neg_markers)
+
+    pos_rows <- lapply(seq_len(nrow(pos_map)), function(i) {
+      ct <- pos_map$cell_type[i]
+      markers <- intersect(extract_markers(pos_map$pos_markers[i]), row_order)
+      if (!length(markers)) return(NULL)
+      data.frame(label = ct, marker = markers, outline_color = "#228B22")
+    })
+
+    neg_rows <- lapply(seq_len(nrow(neg_map)), function(i) {
+      ct <- neg_map$cell_type[i]
+      markers <- intersect(extract_markers(neg_map$neg_markers[i]), row_order)
+      if (!length(markers)) return(NULL)
+      data.frame(label = ct, marker = markers, outline_color = "#FF3131")
+    })
+
+    highlight_df <- dplyr::bind_rows(pos_rows, neg_rows)
+    if (nrow(highlight_df)) {
+      highlight_df$marker <- factor(highlight_df$marker, levels = row_order)
+      highlight_df$label <- factor(highlight_df$label, levels = col_order)
+    }
+  }
+
+  heatmap_colors <- grDevices::colorRampPalette(
+    rev(RColorBrewer::brewer.pal(n = 7, name = "RdYlBu"))
+  )(100)
+
+  value_range <- range(plot_df$expression, na.rm = TRUE, finite = TRUE)
+  if (scale == "none") {
+    fill_limits <- value_range
+    midpoint <- stats::median(plot_df$expression, na.rm = TRUE)
+  } else {
+    max_abs <- max(abs(value_range))
+    fill_limits <- c(-max_abs, max_abs)
+    midpoint <- 0
+  }
+
+  use_viridis <- heatmap_palette %in% c(
+    "viridis", "magma", "plasma", "inferno", "cividis", "rocket", "mako", "turbo"
+  )
+
+  p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = .data$label, y = .data$marker, fill = .data$expression)) +
     ggplot2::geom_tile(color = "white", linewidth = 0.35) +
-    ggplot2::coord_fixed() +
-    ggplot2::scale_fill_distiller(palette = "YlGnBu", direction = 1, na.value = "#f5f5f5") +
+    (if (use_viridis) {
+      ggplot2::scale_fill_viridis_c(
+        option = heatmap_palette,
+        direction = heatmap_direction,
+        na.value = "#f5f5f5"
+      )
+    } else {
+      ggplot2::scale_fill_gradientn(
+        colors = heatmap_colors,
+        limits = fill_limits,
+        na.value = "#f5f5f5"
+      )
+    }) +
     ggplot2::labs(title = title,
-                  x = "Marker",
-                  y = label_col,
-                  fill = "Mean expr") +
+                  x = label_col,
+                  y = "Marker",
+                  fill = fill_label) +
     ggplot2::theme_minimal(base_size = 12) +
     ggplot2::theme(
       panel.grid = ggplot2::element_blank(),
@@ -1395,12 +1574,37 @@ plot_pseudobulk_heatmap <- function(spe,
       legend.key.height = ggplot2::unit(0.8, "cm")
     )
 
-  if (show_values) {
-    p <- p + ggplot2::geom_text(ggplot2::aes(label = round(.data$expression, value_digits)),
-                                size = 2.5,
-                                color = "#1a1a1a",
-                                fontface = "bold")
+  if (!is.null(highlight_df) && nrow(highlight_df)) {
+    p <- p + ggplot2::geom_tile(
+      data = highlight_df,
+      ggplot2::aes(x = .data$label, y = .data$marker),
+      color = highlight_df$outline_color,
+      fill = NA,
+      linewidth = 0.6,
+      inherit.aes = FALSE
+    )
   }
 
+  if (show_values) {
+    span <- max(abs(value_range - midpoint))
+    if (!is.finite(span) || span == 0) {
+      plot_df$text_color <- "black"
+    } else {
+      # Use a mid-range band for black text; dark extremes use white for contrast.
+      plot_df$text_color <- ifelse(abs(plot_df$expression - midpoint) <= 100 * span, "black", "white")
+    }
+
+    p <- p + ggplot2::geom_text(
+      data = plot_df,
+      ggplot2::aes(
+        label = round(.data$expression, value_digits)
+      ),
+      color = plot_df$text_color,
+      size = text_size,
+      fontface = "bold",
+      show.legend = FALSE
+    )
+  }
   p
 }
+
