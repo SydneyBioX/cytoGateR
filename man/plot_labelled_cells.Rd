@@ -12,6 +12,9 @@ plot_labelled_cells(
   x_col = NULL,
   y_col = NULL,
   point_size = 0.8,
+  label_levels = NULL,
+  label_colors = NULL,
+  drop_levels = FALSE,
   facet = TRUE
 )
 }
@@ -32,6 +35,15 @@ numeric, a numeric vector, or character vector of image IDs. Default 1.}
 `spatialCoords(spe)` when available.}
 
 \item{point_size}{Point size. Default 0.8.}
+
+\item{label_levels}{Optional character vector of label levels to enforce for
+legend consistency. If provided, labels are coerced to a factor with these levels.}
+
+\item{label_colors}{Optional named or unnamed vector of colors to use for the
+label levels. If provided alongside `label_levels`, lengths must match.}
+
+\item{drop_levels}{Logical; if FALSE, keep unused levels in the legend.
+Default FALSE.}
 
 \item{facet}{Logical; if TRUE, facet over selected images. If FALSE, plot a
 single image (first selected). Default TRUE.}

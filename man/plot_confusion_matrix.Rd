@@ -12,7 +12,7 @@ plot_confusion_matrix(
   aggregated = TRUE,
   fill_low = "#f0f9e8",
   fill_high = "#08589e",
-  plot_marginals = FALSE
+  plot_marginals = TRUE
 )
 }
 \arguments{

@@ -7,17 +7,25 @@
 plot_pseudobulk_heatmap(
   spe,
   label_col,
-  lineage_table,
+  lineage_table = NULL,
   assay_name = "norm",
   cell_types = NULL,
   marker_groups = c("pos_markers", "neg_markers"),
+  include_all_markers = TRUE,
   drop_unknown = TRUE,
   drop_na = TRUE,
   cluster_rows = FALSE,
   cluster_cols = FALSE,
   show_values = TRUE,
   value_digits = 2,
-  title = "Pseudobulk marker expression"
+  title = "Pseudobulk marker expression",
+  scale = "none",
+  row_order = NULL,
+  col_order = NULL,
+  highlight_lineage = TRUE,
+  heatmap_palette = "RdYlBu",
+  heatmap_direction = 1,
+  text_size = 2.5
 )
 }
 \arguments{
@@ -34,19 +42,42 @@ plot_pseudobulk_heatmap(
 \item{marker_groups}{Which marker sets to include from lineage_table.
 Default `c("pos_markers", "neg_markers")`.}
 
+\item{include_all_markers}{Logical; if TRUE, use all assay markers rather than
+only lineage_table markers. Default TRUE.}
+
 \item{drop_unknown}{Logical; drop "Unknown" labels. Default TRUE.}
 
 \item{drop_na}{Logical; drop NA labels. Default TRUE.}
 
-\item{cluster_rows}{Logical; if TRUE, cluster labels (rows). Default FALSE.}
+\item{cluster_rows}{Logical; if TRUE, cluster markers (rows). Default FALSE.}
 
-\item{cluster_cols}{Logical; if TRUE, cluster markers (cols). Default FALSE.}
+\item{cluster_cols}{Logical; if TRUE, cluster labels (cols). Default FALSE.}
 
 \item{show_values}{Logical; draw mean values on tiles. Default TRUE.}
 
 \item{value_digits}{Digits for tile labels. Default 2.}
 
 \item{title}{Plot title. Default "Pseudobulk marker expression".}
+
+\item{scale}{Scaling for the heatmap. One of "none", "row", or "column".
+Default "none".}
+
+\item{row_order}{Optional character vector of marker names to enforce when
+`cluster_rows = FALSE`. Any missing markers are ignored; any remaining markers
+not listed are appended in their existing order.}
+
+\item{col_order}{Optional character vector of label names to enforce when
+`cluster_cols = FALSE`. Any missing labels are ignored; any remaining labels
+not listed are appended in their existing order.}
+
+\item{highlight_lineage}{Logical; draw outlines for lineage markers per
+cell type. Positive markers are green, negative markers are red. Default FALSE.}
+
+\item{heatmap_palette}{Palette name for the heatmap. Default "RdYlBu" for a
+blue-yellow-red diverging scale (pheatmap style). Set to a viridis option
+(e.g., "viridis", "magma") to use `ggplot2::scale_fill_viridis_c()`.}
+
+\item{heatmap_direction}{Direction for viridis palettes. Default 1.}
 }
 \value{
 A `ggplot` object.

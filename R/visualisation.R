@@ -275,7 +275,7 @@ plot_confusion_matrix <- function(conf_mat,
                                   aggregated = TRUE,
                                   fill_low = "#f0f9e8",
                                   fill_high = "#08589e",
-                                  plot_marginals = FALSE) {
+                                  plot_marginals = TRUE) {
 
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("Please install ggplot2 to use plot_confusion_matrix().")
