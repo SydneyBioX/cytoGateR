@@ -584,8 +584,8 @@ rf_metric_text <- function(fit, digits = 3) {
     s <- tbl$cv_overall_summary
     lines <- c(
       lines,
-      paste0("CV accuracy (mean ± sd): ", fmt(s$accuracy_mean), " ± ", fmt(s$accuracy_sd)),
-      paste0("CV F1 macro (mean ± sd): ", fmt(s$f1_macro_mean), " ± ", fmt(s$f1_macro_sd))
+      paste0("CV accuracy (mean +/- sd): ", fmt(s$accuracy_mean), " ± ", fmt(s$accuracy_sd)),
+      paste0("CV F1 macro (mean +/- sd): ", fmt(s$f1_macro_mean), " ± ", fmt(s$f1_macro_sd))
     )
   }
 
