@@ -843,7 +843,7 @@ plot_rand_cell_probs <- function(spe = NULL,
 #'
 #' @return A `ggplot` object with faceted histograms.
 #' @export
-plot_prob_hist <- function(res,
+plot_score_hist <- function(res,
                            image_index = NULL,
                            image_col = "image_name",
                            prob_prefix = "P_",

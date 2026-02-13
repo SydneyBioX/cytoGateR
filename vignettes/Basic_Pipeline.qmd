@@ -25,12 +25,12 @@ format:
 
 # Getting Started
 
-## Load in the softGatingIMC
+## Load in the cytoGateR
 
 ```{r}
 devtools::document()
 devtools::load_all()
-# devtools::install() # for if you want the package on system 
+devtools::install() # for if you want the package on system
 ```
 
 ## Other Libraries
@@ -39,7 +39,6 @@ devtools::load_all()
 suppressPackageStartupMessages({
   library(tidyverse)
   library(SpatialExperiment)
-  library(softGatingIMC)
   library(ranger)
   library(imcdatasets)
 })
@@ -149,7 +148,7 @@ lineage_table_public <- tribble(
 ## Run Gating
 
 ```{r run-tree-gating}
-res_pub <- softGatingIMC::run_tree_gating(
+res_pub <- cytoGateR::run_tree_gating(
   spe,
   lineage_table_public,
   assay_name = "norm",
@@ -158,7 +157,7 @@ res_pub <- softGatingIMC::run_tree_gating(
   min_score = 0.5,
   uncert_thresh = 0.25
 )
-# res_pub <- softGatingIMC::run_soft_gating(spe1, lineage_table_public) # for soft gating all downstream analysis should still run
+# res_pub <- cytoGateR::run_soft_gating(spe1, lineage_table_public) # for soft gating all downstream analysis should still run
 ```
 
 ## Visualise Cutoffs (98% threshold)
@@ -281,7 +280,7 @@ ggpubr::ggarrange(
     ) + theme(title = element_blank(), plot.subtitle = element_blank())
   ),
   common.legend = TRUE,
-  labels = c("softGatingIMC", "Ground Truth classifier"),
+  labels = c("cytoGateR", "Ground Truth classifier"),
   legend = "bottom",
   label.y = 1.02
 )
