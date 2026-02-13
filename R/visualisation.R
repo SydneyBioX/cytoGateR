@@ -824,16 +824,13 @@ plot_rand_cell_probs <- function(spe = NULL,
     )
 }
 
-#' Plot cell-type probability histograms for a single image
+#' Plot cell-type probability histograms
 #'
-#' Faceted histograms of per-cell probabilities for each cell type in one
-#' image, using the probability columns already stored in `colData(spe)`
+#' Faceted histograms of per-cell probabilities for each cell type, using the
+#' probability columns already stored in `colData(spe)`
 #' (e.g., `P_T_cell`, `P_Tumor`).
 #'
 #' @param res Result list containing an `spe` element with probability columns.
-#' @param image_index Which image to plot; numeric index or image ID string. Default NULL
-#'   means aggregate all images together.
-#' @param image_col Column name in `colData(spe)` holding image IDs. Default "image_name".
 #' @param prob_prefix Prefix used for probability columns in `colData(spe)`. Default "P_".
 #' @param binwidth Histogram bin width. Default 0.01.
 #' @param drop_na Logical; drop NA probabilities before plotting. Default TRUE.
@@ -844,8 +841,6 @@ plot_rand_cell_probs <- function(spe = NULL,
 #' @return A `ggplot` object with faceted histograms.
 #' @export
 plot_score_hist <- function(res,
-                           image_index = NULL,
-                           image_col = "image_name",
                            prob_prefix = "P_",
                            binwidth = 0.01,
                            drop_na = TRUE,
@@ -871,50 +866,13 @@ plot_score_hist <- function(res,
     meta$cell_id <- rownames(meta)
   }
 
-  if (!image_col %in% names(meta)) {
-    stop("image_col '", image_col, "' not found in colData(spe).")
-  }
-
   prob_cols <- names(meta)[startsWith(names(meta), prob_prefix)]
   if (!length(prob_cols)) {
     stop("No probability columns starting with '", prob_prefix, "' found in colData(spe).")
   }
 
-  meta_needed <- meta[, unique(c("cell_id", image_col, prob_cols)), drop = FALSE]
-
-  image_values <- unique(stats::na.omit(meta_needed[[image_col]]))
-  if (!length(image_values)) {
-    stop("No image IDs found in column '", image_col, "'.")
-  }
-
-  if (!is.null(image_index)) {
-    if (is.character(image_index)) {
-      if (!image_index %in% image_values) {
-        stop("image_index '", image_index, "' not found. Available examples: ",
-             paste(utils::head(image_values, 5), collapse = ", "))
-      }
-      selected_image <- image_index
-    } else {
-      if (!is.numeric(image_index) || length(image_index) != 1L || is.na(image_index)) {
-        stop("image_index must be a single numeric index or a character image ID.")
-      }
-      image_index <- as.integer(image_index)
-      if (image_index < 1 || image_index > length(image_values)) {
-        stop("image_index must be between 1 and ", length(image_values), ".")
-      }
-      selected_image <- image_values[image_index]
-    }
-    plot_data <- meta_needed |>
-      dplyr::filter(.data[[image_col]] == selected_image)
-    if (!nrow(plot_data)) {
-      stop("No cells found for image '", selected_image, "'.")
-    }
-    subtitle_txt <- paste0("Image: ", selected_image,
-                           " | n cells: ", length(unique(plot_data$cell_id)))
-  } else {
-    plot_data <- meta_needed
-    subtitle_txt <- paste0("All images | n cells: ", length(unique(plot_data$cell_id)))
-  }
+  plot_data <- meta[, unique(c("cell_id", prob_cols)), drop = FALSE]
+  subtitle_txt <- paste0("All cells | n cells: ", length(unique(plot_data$cell_id)))
 
   plot_long <- plot_data |>
     tidyr::pivot_longer(

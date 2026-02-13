@@ -2,12 +2,10 @@
 % Please edit documentation in R/visualisation.R
 \name{plot_score_hist}
 \alias{plot_score_hist}
-\title{Plot cell-type probability histograms for a single image}
+\title{Plot cell-type probability histograms}
 \usage{
 plot_score_hist(
   res,
-  image_index = NULL,
-  image_col = "image_name",
   prob_prefix = "P_",
   binwidth = 0.01,
   drop_na = TRUE,
@@ -16,11 +14,6 @@ plot_score_hist(
 }
 \arguments{
 \item{res}{Result list containing an `spe` element with probability columns.}
-
-\item{image_index}{Which image to plot; numeric index or image ID string. Default NULL
-means aggregate all images together.}
-
-\item{image_col}{Column name in `colData(spe)` holding image IDs. Default "image_name".}
 
 \item{prob_prefix}{Prefix used for probability columns in `colData(spe)`. Default "P_".}
 
@@ -36,7 +29,7 @@ the 0.98 quantile.}
 A `ggplot` object with faceted histograms.
 }
 \description{
-Faceted histograms of per-cell probabilities for each cell type in one
-image, using the probability columns already stored in `colData(spe)`
+Faceted histograms of per-cell probabilities for each cell type, using the
+probability columns already stored in `colData(spe)`
 (e.g., `P_T_cell`, `P_Tumor`).
 }
