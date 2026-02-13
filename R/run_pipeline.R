@@ -125,16 +125,28 @@ run_tree_gating <- function(spe,
     pos <- lineage_table$pos_markers[[i]]
     neg <- lineage_table$neg_markers[[i]] %||% character(0)
     message(paste0("Building ", i, "th tree - ", ct, " Cell Type."))
-    build_fullcoverage_tree(
-      expr_norm,
-      pos,
-      neg,
-      max_depth = max_depth,
-      min_cells = min_cells,
-      min_score = min_score,
-      cutoff_method = cutoff_method,
-      gmm_model_names = gmm_model_names
+    timing <- system.time(
+      tree <- build_fullcoverage_tree(
+        expr_norm,
+        pos,
+        neg,
+        max_depth = max_depth,
+        min_cells = min_cells,
+        min_score = min_score,
+        cutoff_method = cutoff_method,
+        gmm_model_names = gmm_model_names
+      )
     )
+    message("Finished ",
+            ct,
+            ". Timing: ",
+            paste(
+              c("usr", "sys", "elap", "u.c", "s.c"),
+              round(timing, 2),
+              sep = ": ",
+              collapse = "; "
+            ))
+    tree
   }
 
   if (isTRUE(parallel)) {
