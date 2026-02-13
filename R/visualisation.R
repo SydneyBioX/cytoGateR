@@ -1466,17 +1466,17 @@ plot_pseudobulk_heatmap <- function(spe,
       ct <- pos_map$cell_type[i]
       markers <- intersect(extract_markers(pos_map$pos_markers[i]), row_order)
       if (!length(markers)) return(NULL)
-      data.frame(label = ct, marker = markers, outline_color = "#228B22")
+      data.frame(label = ct, marker = markers, outline_color = "#00ff00")
     })
 
     neg_rows <- lapply(seq_len(nrow(neg_map)), function(i) {
       ct <- neg_map$cell_type[i]
       markers <- intersect(extract_markers(neg_map$neg_markers[i]), row_order)
       if (!length(markers)) return(NULL)
-      data.frame(label = ct, marker = markers, outline_color = "#FF3131")
+      data.frame(label = ct, marker = markers, outline_color = "#ff0000")
     })
 
-    highlight_df <- dplyr::bind_rows(pos_rows, neg_rows)
+    highlight_df <- dplyr::bind_rows(neg_rows, pos_rows)
     if (nrow(highlight_df)) {
       highlight_df$marker <- factor(highlight_df$marker, levels = row_order)
       highlight_df$label <- factor(highlight_df$label, levels = col_order)
@@ -1538,7 +1538,7 @@ plot_pseudobulk_heatmap <- function(spe,
       ggplot2::aes(x = .data$label, y = .data$marker),
       color = highlight_df$outline_color,
       fill = NA,
-      linewidth = 0.6,
+      linewidth = 0.8,
       inherit.aes = FALSE
     )
   }
