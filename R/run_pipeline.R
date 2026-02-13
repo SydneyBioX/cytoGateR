@@ -77,6 +77,13 @@ run_soft_gating <- function(spe, lineage_table,
 #' @param min_score Minimum separability score required to accept a split.
 #' @param uncert_thresh Cells whose best lineage probability is below this
 #'   threshold are labeled `"Uncertain"`.
+#' @param cutoff_method Cutoff selection method passed to [fit_gmm_2()].
+#' @param gmm_model_names Optional character vector of model names to pass to
+#'   [mclust::Mclust()] (e.g., "V" to forbid equal-variance in 1D, "E" for equal-variance always and NULL (default) for selection by BIC).
+#' @param parallel Logical; if `TRUE`, build per-cell-type trees in parallel
+#'   using `furrr::future_map()`.
+#' @param workers Optional integer number of workers for parallel execution.
+#'   Defaults to `parallel::detectCores() - 1` when `parallel = TRUE`.
 #'
 #' @return A named list with components:
 #' \describe{
@@ -99,7 +106,12 @@ run_tree_gating <- function(spe,
                             max_depth = 4,
                             min_cells = 200,
                             min_score = 0.5,
-                            uncert_thresh = 0.25) {
+                            uncert_thresh = 0.25,
+                            cutoff_method = c("mean", "equal_posteriors"),
+                            gmm_model_names = NULL,
+                            parallel = FALSE,
+                            workers = NULL) {
+  cutoff_method <- match.arg(cutoff_method)
 
   .assert_spe(spe)
   .assert_lineage_table(lineage_table)
@@ -108,26 +120,40 @@ run_tree_gating <- function(spe,
 
   expr_norm <- SummarizedExperiment::assay(spe, assay_name)
 
-  # Setup parallel processing with future
-  oplan <- future::plan(future::multisession, workers = parallel::detectCores() - 1)
-  on.exit(future::plan(oplan), add = TRUE)
+  build_tree <- function(i) {
+    ct <- lineage_table$cell_type[i]
+    pos <- lineage_table$pos_markers[[i]]
+    neg <- lineage_table$neg_markers[[i]] %||% character(0)
+    message(paste0("Building ", i, "th tree - ", ct, " Cell Type."))
+    build_fullcoverage_tree(
+      expr_norm,
+      pos,
+      neg,
+      max_depth = max_depth,
+      min_cells = min_cells,
+      min_score = min_score,
+      cutoff_method = cutoff_method,
+      gmm_model_names = gmm_model_names
+    )
+  }
 
-  # Build trees in parallel
-  trees_list <- furrr::future_map(
-    seq_len(nrow(lineage_table)),
-    function(i) {
-      pos <- lineage_table$pos_markers[[i]]
-      neg <- lineage_table$neg_markers[[i]] %||% character(0)
+  if (isTRUE(parallel)) {
+    if (is.null(workers)) {
+      workers <- max(1, parallel::detectCores() - 1)
+    }
+    oplan <- future::plan(future::multisession, workers = workers)
+    on.exit(future::plan(oplan), add = TRUE)
 
-      build_fullcoverage_tree(expr_norm, pos, neg,
-                              max_depth = max_depth,
-                              min_cells = min_cells,
-                              min_score = min_score)
-    },
-    .options = furrr::furrr_options(seed = TRUE)
-  )
+    trees <- furrr::future_map(
+      seq_len(nrow(lineage_table)),
+      build_tree,
+      .options = furrr::furrr_options(seed = TRUE)
+    )
+  } else {
+    trees <- lapply(seq_len(nrow(lineage_table)), build_tree)
+  }
 
-  trees <- setNames(trees_list, lineage_table$cell_type)
+  trees <- setNames(trees, lineage_table$cell_type)
 
   prob_mat <- sapply(names(trees), function(ct) {
     neg <- lineage_table$neg_markers[lineage_table$cell_type == ct][[1]] %||% character(0)
@@ -138,17 +164,25 @@ run_tree_gating <- function(spe,
 
   prob_mat[!is.finite(prob_mat)] <- 0
 
-  lineage_priority <- setdiff(lineage_table$cell_type, "Proliferating")
+  lineage_priority <- lineage_table$cell_type[lineage_table$cell_type != "Proliferating"]
   prob_lineage <- prob_mat[, lineage_priority, drop = FALSE]
 
-  best_idx <- apply(prob_lineage, 1, which.max)
-  best_lab <- colnames(prob_lineage)[best_idx]
-  best_p <- apply(prob_lineage, 1, max)
+  if (ncol(prob_lineage) == 0) {
+    best_lab <- rep("Uncertain", nrow(prob_mat))
+    best_p <- rep(0, nrow(prob_mat))
+  } else {
+    best_idx <- apply(prob_lineage, 1, which.max)
+    best_lab <- colnames(prob_lineage)[best_idx]
+    best_p <- apply(prob_lineage, 1, max)
+  }
 
   hard_label <- ifelse(best_p < uncert_thresh, "Uncertain", best_lab)
 
-  has_prolif <- "Proliferating" %in% colnames(prob_mat)
-  p_prolif <- if (has_prolif) prob_mat[, "Proliferating"] else rep(0, nrow(prob_mat))
+  if ("Proliferating" %in% colnames(prob_mat)) {
+    p_prolif <- prob_mat[, "Proliferating"]
+  } else {
+    p_prolif <- rep(0, nrow(prob_mat))
+  }
   prolif_flag <- p_prolif >= 0.5
 
   hard_label_with_state <- ifelse(prolif_flag & hard_label != "Uncertain",

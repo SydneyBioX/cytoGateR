@@ -4,10 +4,20 @@
 \alias{fit_gmm_2}
 \title{Fit a 2-component Gaussian mixture model}
 \usage{
-fit_gmm_2(x)
+fit_gmm_2(
+  x,
+  cutoff_method = c("mean", "equal_posteriors"),
+  gmm_model_names = NULL
+)
 }
 \arguments{
 \item{x}{numeric vector}
+
+\item{cutoff_method}{Character. One of "mean" (midpoint of means) or
+"equal_posteriors" (threshold where component posteriors are equal).}
+
+\item{gmm_model_names}{Optional character vector of model names to pass to
+[mclust::Mclust()] (e.g., "V" to forbid equal-variance in 1D).}
 }
 \value{
 list with GMM parameters or NULL

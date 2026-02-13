@@ -12,7 +12,9 @@ build_fullcoverage_tree(
   depth = 0,
   max_depth = 4,
   min_cells = 200,
-  min_score = 0.5
+  min_score = 0.5,
+  cutoff_method = c("mean", "equal_posteriors"),
+  gmm_model_names = NULL
 )
 }
 \arguments{
@@ -31,6 +33,11 @@ build_fullcoverage_tree(
 \item{min_cells}{minimum cells}
 
 \item{min_score}{minimum separability}
+
+\item{cutoff_method}{Cutoff selection method passed to [fit_gmm_2()].}
+
+\item{gmm_model_names}{Optional character vector of model names to pass to
+[mclust::Mclust()] (e.g., "V" to forbid equal-variance in 1D).}
 }
 \value{
 tree object

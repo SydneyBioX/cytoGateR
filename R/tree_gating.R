@@ -1,17 +1,38 @@
 #' Fit a 2-component Gaussian mixture model
 #'
 #' @param x numeric vector
+#' @param cutoff_method Character. One of "mean" (midpoint of means) or
+#'   "equal_posteriors" (threshold where component posteriors are equal).
+#' @param gmm_model_names Optional character vector of model names to pass to
+#'   [mclust::Mclust()] (e.g., "V" to forbid equal-variance in 1D).
 #' @return list with GMM parameters or NULL
 #' @export
-fit_gmm_2 <- function(x) {
+fit_gmm_2 <- function(x,
+                      cutoff_method = c("mean", "equal_posteriors"),
+                      gmm_model_names = NULL) {
+  cutoff_method <- match.arg(cutoff_method)
   x <- x[is.finite(x)]
   if (length(x) < 50L || length(unique(x)) < 3L) return(NULL)
 
-  gmm <- tryCatch(mclust::Mclust(x, G = 2, verbose = FALSE), error = function(e) NULL)
+  gmm <- tryCatch(
+    mclust::Mclust(x, G = 2, modelNames = gmm_model_names, verbose = FALSE),
+    error = function(e) NULL
+  )
   if (is.null(gmm) || length(gmm$parameters$mean) != 2) return(NULL)
 
   mu <- as.numeric(gmm$parameters$mean)
-  sig2 <- as.numeric(gmm$parameters$variance$sigmasq)
+  # sig2 <- as.numeric(gmm$parameters$variance$sigmasq)
+
+  # --- FIX START ---
+  # Check if sigmasq is a single value (Equal Variance model) and replicate it if so
+  sig2 <- gmm$parameters$variance$sigmasq
+  if (length(sig2) == 1) {
+    sig2 <- rep(sig2, 2)
+  }
+  sig2 <- as.numeric(sig2)
+  # --- FIX END ---
+
+
   pi <- as.numeric(gmm$parameters$pro)
 
   ord <- order(mu)
@@ -20,10 +41,44 @@ fit_gmm_2 <- function(x) {
   p1 <- pi[ord[1]]; p2 <- pi[ord[2]]
 
   sep <- abs(mu2 - mu1) / sqrt(s1^2 + s2^2)
-  cutoff <- mean(c(mu1, mu2))
+  cutoff <- if (cutoff_method == "equal_posteriors") {
+    gmm_equal_posterior_cutoff(mu1, mu2, s1, s2, p1, p2)
+  } else {
+    mean(c(mu1, mu2))
+  }
 
   list(mu1 = mu1, mu2 = mu2, s1 = s1, s2 = s2, p1 = p1, p2 = p2,
        cutoff = cutoff, sep_score = sep)
+}
+
+#' Compute the cutoff where posteriors are equal
+#'
+#' @param mu1 Numeric mean of component 1.
+#' @param mu2 Numeric mean of component 2.
+#' @param s1 Numeric SD of component 1.
+#' @param s2 Numeric SD of component 2.
+#' @param p1 Numeric mixing weight of component 1.
+#' @param p2 Numeric mixing weight of component 2.
+#'
+#' @return Numeric cutoff. Defaults to midpoint if root finding fails.
+gmm_equal_posterior_cutoff <- function(mu1, mu2, s1, s2, p1, p2) {
+  if (!all(is.finite(c(mu1, mu2, s1, s2, p1, p2))) || any(c(s1, s2) <= 0)) {
+    return(mean(c(mu1, mu2)))
+  }
+
+  f <- function(x) {
+    stats::dnorm(x, mean = mu1, sd = s1) * p1 -
+      stats::dnorm(x, mean = mu2, sd = s2) * p2
+  }
+
+  lo <- min(mu1, mu2)
+  hi <- max(mu1, mu2)
+  root <- try(stats::uniroot(f, interval = c(lo, hi)), silent = TRUE)
+  if (inherits(root, "try-error")) {
+    return(mean(c(mu1, mu2)))
+  }
+
+  as.numeric(root$root)
 }
 
 #' Marker separability
@@ -67,6 +122,9 @@ score_marker_rank <- function(x) {
 #' @param max_depth max depth
 #' @param min_cells minimum cells
 #' @param min_score minimum separability
+#' @param cutoff_method Cutoff selection method passed to [fit_gmm_2()].
+#' @param gmm_model_names Optional character vector of model names to pass to
+#'   [mclust::Mclust()] (e.g., "V" to forbid equal-variance in 1D).
 #' @return tree object
 #' @export
 build_fullcoverage_tree <- function(expr_mat,
@@ -76,7 +134,10 @@ build_fullcoverage_tree <- function(expr_mat,
                                     depth = 0,
                                     max_depth = 4,
                                     min_cells = 200,
-                                    min_score = 0.5) {
+                                    min_score = 0.5,
+                                    cutoff_method = c("mean", "equal_posteriors"),
+                                    gmm_model_names = NULL) {
+  cutoff_method <- match.arg(cutoff_method)
 
   markers_pos <- intersect(markers_pos, rownames(expr_mat))
   markers_neg <- intersect(markers_neg, rownames(expr_mat))
@@ -98,7 +159,11 @@ build_fullcoverage_tree <- function(expr_mat,
 
   marker_stats <- lapply(markers_pos, function(m) {
     x <- as.numeric(expr_mat[m, cell_idx])
-    fit <- fit_gmm_2(x)
+    fit <- fit_gmm_2(
+      x,
+      cutoff_method = cutoff_method,
+      gmm_model_names = gmm_model_names
+    )
     if (is.null(fit)) return(c(marker = m, sep = NA, acc = NA, cutoff = NA, scale = NA))
 
     cutoff <- fit$cutoff
@@ -146,9 +211,13 @@ build_fullcoverage_tree <- function(expr_mat,
     sep_score = as.numeric(best$sep),
     cells = cell_idx,
     left = build_fullcoverage_tree(expr_mat, remaining_pos, markers_neg, left,
-                                   depth + 1, max_depth, min_cells, min_score),
+                                   depth + 1, max_depth, min_cells, min_score,
+                                   cutoff_method = cutoff_method,
+                                   gmm_model_names = gmm_model_names),
     right = build_fullcoverage_tree(expr_mat, remaining_pos, markers_neg, right,
-                                    depth + 1, max_depth, min_cells, min_score)
+                                    depth + 1, max_depth, min_cells, min_score,
+                                    cutoff_method = cutoff_method,
+                                    gmm_model_names = gmm_model_names)
   )
 }
 

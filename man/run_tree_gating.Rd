@@ -11,7 +11,11 @@ run_tree_gating(
   max_depth = 4,
   min_cells = 200,
   min_score = 0.5,
-  uncert_thresh = 0.25
+  uncert_thresh = 0.25,
+  cutoff_method = c("mean", "equal_posteriors"),
+  gmm_model_names = NULL,
+  parallel = FALSE,
+  workers = NULL
 )
 }
 \arguments{
@@ -34,6 +38,17 @@ type.}
 
 \item{uncert_thresh}{Cells whose best lineage probability is below this
 threshold are labeled `"Uncertain"`.}
+
+\item{cutoff_method}{Cutoff selection method passed to [fit_gmm_2()].}
+
+\item{gmm_model_names}{Optional character vector of model names to pass to
+[mclust::Mclust()] (e.g., "V" to forbid equal-variance in 1D, "E" for equal-variance always and NULL (default) for selection by BIC).}
+
+\item{parallel}{Logical; if `TRUE`, build per-cell-type trees in parallel
+using `furrr::future_map()`.}
+
+\item{workers}{Optional integer number of workers for parallel execution.
+Defaults to `parallel::detectCores() - 1` when `parallel = TRUE`.}
 }
 \value{
 A named list with components:
