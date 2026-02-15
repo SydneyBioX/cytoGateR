@@ -764,8 +764,8 @@ plot_label_confusion_matrix <- function(spe,
 #' @param assay_name Assay name to pull values from. Default "counts".
 #' @param image_col Column in `colData()` used to color densities. Default
 #'   "image_name".
-#' @param title Optional plot title. Defaults to "Density of {marker} (assay:
-#'   {assay_name})".
+#' @param title Optional plot title. Defaults to "Density of \{marker\} (assay:
+#'   \{assay_name\})".
 #' @param show_legend Logical; whether to show the legend. Default `FALSE`.
 #'
 #' @return A `ggplot` object.

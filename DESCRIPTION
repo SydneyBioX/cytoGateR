@@ -45,5 +45,10 @@ Suggests:
     viridisLite,
     knitr,
     rmarkdown,
-    quarto
+    quarto,
+    tidyverse,
+    imcdatasets,
+    simpleSeg,
+    ggpubr,
+    forcats
 VignetteBuilder: quarto
