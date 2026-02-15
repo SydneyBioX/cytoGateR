@@ -24,8 +24,8 @@ and metadata in `colData()`.}
 \item{image_col}{Column in `colData()` used to color densities. Default
 "image_name".}
 
-\item{title}{Optional plot title. Defaults to "Density of {marker} (assay:
-{assay_name})".}
+\item{title}{Optional plot title. Defaults to "Density of \{marker\} (assay:
+\{assay_name\})".}
 
 \item{show_legend}{Logical; whether to show the legend. Default `FALSE`.}
 }

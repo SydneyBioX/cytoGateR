@@ -8,7 +8,7 @@ params:
   show: 'as.is'
 vignette: >
   %\VignetteIndexEntry{Basic Pipeline}
-  %\VignetteEngine{quarto::quarto}
+  %\VignetteEngine{quarto::html}
   %\VignetteEncoding{UTF-8}
 format:
   html:
@@ -46,6 +46,9 @@ suppressPackageStartupMessages({
   library(ranger)
   library(imcdatasets)
   library(cytoGateR)
+  library(simpleSeg)
+  library(ggpubr)
+  library(forcats)
 })
 ```
 
