@@ -9,7 +9,11 @@ plot_score_hist(
   prob_prefix = "P_",
   binwidth = 0.01,
   drop_na = TRUE,
-  cutoff_fn = prob_quantile_cutoff
+  cutoff_fn = prob_quantile_cutoff,
+  label_col = NULL,
+  label_levels = NULL,
+  label_colors = NULL,
+  drop_levels = FALSE
 )
 }
 \arguments{
@@ -24,6 +28,18 @@ plot_score_hist(
 \item{cutoff_fn}{Function taking a numeric vector of probabilities for a cell type and
 returning a single numeric cutoff to draw. Default [prob_quantile_cutoff()], which uses
 the 0.98 quantile.}
+
+\item{label_col}{Optional column in `colData(spe)` used to color histograms
+by ground truth (or any label column).}
+
+\item{label_levels}{Optional character vector of label levels to enforce for
+legend consistency.}
+
+\item{label_colors}{Optional named or unnamed vector of colors to use for the
+label levels. If provided alongside `label_levels`, lengths must match.}
+
+\item{drop_levels}{Logical; if FALSE, keep unused levels in the legend.
+Default FALSE.}
 }
 \value{
 A `ggplot` object with faceted histograms.

@@ -48,6 +48,217 @@ plot_marker_priority_tree <- function(lineage_table, marker_stats, cell_type_nam
                   subtitle = "Markers ordered by separability weight")
 }
 
+#' Plot marker intensity with optional GMM fit
+#'
+#' Visualizes a marker distribution, optionally with a two-component GMM fit
+#' and cutoff overlays. Useful for QC and comparing marker behavior across
+#' groups.
+#'
+#' @param spe A `SpatialExperiment`/`SingleCellExperiment`.
+#' @param marker Marker name to plot (must match a row in the assay).
+#' @param subtitle Subtitle for the plot.
+#' @param binwidth Histogram bin width. If NULL, uses range/100.
+#' @param label_col Optional column in `colData(spe)` used to subset to a
+#'   specific cell type and to color the histogram.
+#' @param cell_type Optional cell type value to subset when `label_col` is set.
+#' @param do_fit Logical; fit a 2-component GMM and draw the components.
+#' @param cutoff_method Passed to [fit_gmm_2()].
+#' @param gmm_model_names Passed to [fit_gmm_2()].
+#' @param label_levels Optional character vector of label levels to enforce for
+#'   legend consistency.
+#' @param label_colors Optional named or unnamed vector of colors to use for the
+#'   label levels. If provided alongside `label_levels`, lengths must match.
+#' @param drop_levels Logical; if FALSE, keep unused levels in the legend.
+#'   Default FALSE.
+#'
+#' @return A `ggplot` object.
+#' @export
+plot_ct_marker_intensity <- function(spe,
+                                     marker,
+                                     subtitle,
+                                     binwidth = NULL,
+                                     label_col = NULL,
+                                     cell_type = NULL,
+                                     do_fit = TRUE,
+                                     cutoff_method = "equal_posteriors",
+                                     gmm_model_names = NULL,
+                                     label_levels = NULL,
+                                     label_colors = NULL,
+                                     drop_levels = FALSE) {
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Please install ggplot2 to use plot_ct_marker_intensity().")
+  }
+
+  .assert_spe(spe)
+
+  if (!"norm" %in% SummarizedExperiment::assayNames(spe)) {
+    stop("Assay 'norm' not found in spe.")
+  }
+
+  assay_mat <- SummarizedExperiment::assay(spe, "norm")
+  if (is.null(rownames(assay_mat)) || !marker %in% rownames(assay_mat)) {
+    stop("Marker '", marker, "' not found in assay rownames.")
+  }
+
+  if (!is.null(label_col)) {
+    if (!label_col %in% names(SummarizedExperiment::colData(spe))) {
+      stop("label_col '", label_col, "' not found in colData(spe).")
+    }
+    if (!is.null(cell_type)) {
+      spe <- spe[, SummarizedExperiment::colData(spe)[[label_col]] == cell_type]
+      if (!ncol(spe)) stop("No cells found for the selected label subset.")
+    }
+  }
+
+  marker_dist <- SummarizedExperiment::assay(spe, "norm") |>
+    t() |>
+    as.data.frame() |>
+    dplyr::pull(marker)
+
+  fit <- NULL
+  if (do_fit) {
+    fit <- fit_gmm_2(
+      marker_dist,
+      cutoff_method = cutoff_method,
+      gmm_model_names = gmm_model_names
+    )
+  }
+
+  marker_df <- data.frame(marker = marker_dist, check.names = FALSE)
+
+  resolve_binwidth <- function(x, binwidth) {
+    if (!is.null(binwidth) && is.finite(binwidth) && binwidth > 0) {
+      return(binwidth)
+    }
+    bw <- diff(range(x, na.rm = TRUE)) / 100
+    if (!is.finite(bw) || bw <= 0) bw <- 0.01
+    bw
+  }
+  if (!is.null(label_col)) {
+    marker_df[[label_col]] <- as.character(SummarizedExperiment::colData(spe)[[label_col]])
+    if (!is.null(label_levels)) {
+      label_levels <- as.character(label_levels)
+      marker_df[[label_col]] <- factor(marker_df[[label_col]], levels = label_levels)
+    }
+
+    label_levels_data <- marker_df[[label_col]]
+    label_levels_data <- if (is.factor(label_levels_data)) levels(label_levels_data) else unique(as.character(label_levels_data))
+    label_levels_use <- label_levels %||% label_levels_data
+
+    if (is.null(label_colors)) {
+      if (!requireNamespace("pals", quietly = TRUE)) {
+        stop("Please install pals to use the default high-contrast palette in plot_ct_marker_intensity().")
+      }
+      label_colors <- as.vector(pals::polychrome(length(label_levels_use)))
+      names(label_colors) <- label_levels_use
+    } else {
+      if (length(label_colors) != length(label_levels_use)) {
+        stop("label_colors must be the same length as the label levels when provided.")
+      }
+      if (is.null(names(label_colors))) {
+        names(label_colors) <- label_levels_use
+      }
+    }
+
+    marker_df <- marker_df[is.finite(marker_df$marker) & !is.na(marker_df[[label_col]]), , drop = FALSE]
+    if (!nrow(marker_df)) stop("No finite values found for marker.")
+
+    bw <- resolve_binwidth(marker_df$marker, binwidth)
+
+    p <- ggplot2::ggplot(marker_df) +
+      ggplot2::aes(x = .data[["marker"]]) +
+      ggplot2::geom_histogram(
+        ggplot2::aes(fill = .data[[label_col]]),
+        binwidth = bw,
+        alpha = 0.6,
+        position = "stack"
+      ) +
+      ggplot2::scale_fill_manual(values = label_colors, drop = drop_levels, limits = label_levels_use) +
+      ggplot2::theme_classic()
+  } else {
+    marker_df <- marker_df[is.finite(marker_df$marker), , drop = FALSE]
+    if (!nrow(marker_df)) stop("No finite values found for marker.")
+    bw <- resolve_binwidth(marker_df$marker, binwidth)
+    p <- ggplot2::ggplot(marker_df) +
+      ggplot2::aes(x = .data[["marker"]]) +
+      ggplot2::geom_histogram(
+        binwidth = bw,
+        fill = "grey70",
+        color = "grey40",
+        alpha = 0.8,
+        show.legend = FALSE
+      ) +
+      ggplot2::theme_classic()
+  }
+
+  if (!is.null(fit)) {
+    cutoff <- fit$cutoff
+
+    n_cells <- nrow(marker_df)
+    bw <- resolve_binwidth(marker_df$marker, binwidth)
+
+    x_seq <- seq(
+      min(marker_df$marker, na.rm = TRUE),
+      max(marker_df$marker, na.rm = TRUE),
+      length.out = 200
+    )
+
+    gmm_df <- data.frame(
+      x = x_seq,
+      y1 = fit$p1 * dnorm(x_seq, mean = fit$mu1, sd = fit$s1),
+      y2 = fit$p2 * dnorm(x_seq, mean = fit$mu2, sd = fit$s2)
+    )
+    gmm_df$y_total <- gmm_df$y1 + gmm_df$y2
+    gmm_df$y1 <- gmm_df$y1 * n_cells * bw
+    gmm_df$y2 <- gmm_df$y2 * n_cells * bw
+    gmm_df$y_total <- gmm_df$y_total * n_cells * bw
+
+    p <- p +
+      ggplot2::geom_line(
+        data = gmm_df,
+        ggplot2::aes(x = .data[["x"]], y = .data[["y1"]]),
+        linetype = "dashed",
+        linewidth = 1,
+        color = "red",
+        show.legend = FALSE,
+        inherit.aes = FALSE
+      ) +
+      ggplot2::geom_line(
+        data = gmm_df,
+        ggplot2::aes(x = .data[["x"]], y = .data[["y2"]]),
+        linetype = "dashed",
+        linewidth = 1,
+        color = "blue",
+        show.legend = FALSE,
+        inherit.aes = FALSE
+      ) +
+      ggplot2::geom_line(
+        data = gmm_df,
+        ggplot2::aes(x = .data[["x"]], y = .data[["y_total"]]),
+        linewidth = 0.5,
+        alpha = 1,
+        color = "black",
+        show.legend = FALSE,
+        inherit.aes = FALSE
+      )
+      # ggplot2::geom_vline(xintercept = cutoff, linetype = "solid", color = "orange", show.legend = FALSE) +
+      # ggplot2::geom_vline(xintercept = fit$mu1, color = "red", show.legend = FALSE) +
+      # ggplot2::geom_vline(xintercept = fit$mu2, color = "blue", show.legend = FALSE)
+  }
+
+  fill_label <- if (!is.null(label_col)) label_col else NULL
+
+  p +
+    ggplot2::labs(
+      x = paste("Transformed and Normalised", marker, "expression"),
+      y = "Count",
+      title = paste(marker, "Histogram"),
+      subtitle = paste(subtitle, "n =", ncol(spe)),
+      fill = fill_label
+    ) +
+    ggplot2::coord_cartesian(xlim = c(0, 1))
+}
+
 
 #' Plot spatial probability map for a cell type
 #'
@@ -844,6 +1055,14 @@ plot_rand_cell_probs <- function(spe = NULL,
 #' @param cutoff_fn Function taking a numeric vector of probabilities for a cell type and
 #'   returning a single numeric cutoff to draw. Default [prob_quantile_cutoff()], which uses
 #'   the 0.98 quantile.
+#' @param label_col Optional column in `colData(spe)` used to color histograms
+#'   by ground truth (or any label column).
+#' @param label_levels Optional character vector of label levels to enforce for
+#'   legend consistency.
+#' @param label_colors Optional named or unnamed vector of colors to use for the
+#'   label levels. If provided alongside `label_levels`, lengths must match.
+#' @param drop_levels Logical; if FALSE, keep unused levels in the legend.
+#'   Default FALSE.
 #'
 #' @return A `ggplot` object with faceted histograms.
 #' @export
@@ -851,7 +1070,11 @@ plot_score_hist <- function(res,
                            prob_prefix = "P_",
                            binwidth = 0.01,
                            drop_na = TRUE,
-                           cutoff_fn = prob_quantile_cutoff) {
+                           cutoff_fn = prob_quantile_cutoff,
+                           label_col = NULL,
+                           label_levels = NULL,
+                           label_colors = NULL,
+                           drop_levels = FALSE) {
 
   if (!requireNamespace("ggplot2", quietly = TRUE) ||
       !requireNamespace("dplyr", quietly = TRUE) ||
@@ -878,19 +1101,33 @@ plot_score_hist <- function(res,
     stop("No probability columns starting with '", prob_prefix, "' found in colData(spe).")
   }
 
-  plot_data <- meta[, unique(c("cell_id", prob_cols)), drop = FALSE]
+  if (!is.null(label_col) && !label_col %in% names(meta)) {
+    stop("label_col '", label_col, "' not found in colData(spe).")
+  }
+
+  plot_data <- meta[, unique(c("cell_id", prob_cols, label_col)), drop = FALSE]
   subtitle_txt <- paste0("All cells | n cells: ", length(unique(plot_data$cell_id)))
+
+  prob_name_col <- if (!is.null(label_col) && label_col == "cell_type") {
+    "prob_cell_type"
+  } else {
+    "cell_type"
+  }
 
   plot_long <- plot_data |>
     tidyr::pivot_longer(
       cols = dplyr::all_of(prob_cols),
-      names_to = "cell_type",
+      names_to = prob_name_col,
       names_prefix = prob_prefix,
       values_to = "scores"
     )
 
   if (drop_na) {
     plot_long <- dplyr::filter(plot_long, !is.na(.data$scores))
+  }
+
+  if (!is.null(label_col)) {
+    plot_long <- plot_long[!is.na(plot_long[[label_col]]), , drop = FALSE]
   }
 
   if (!nrow(plot_long)) {
@@ -902,7 +1139,7 @@ plot_score_hist <- function(res,
   }
 
   cutoff_df <- plot_long |>
-    dplyr::group_by(.data$cell_type) |>
+    dplyr::group_by(.data[[prob_name_col]]) |>
     dplyr::summarise(
       cutoff = {
         val <- cutoff_fn(.data$scores)
@@ -915,15 +1152,57 @@ plot_score_hist <- function(res,
     ) |>
     dplyr::filter(is.finite(.data$cutoff))
 
-  ggplot2::ggplot(plot_long, ggplot2::aes(x = .data$scores)) +
-    ggplot2::geom_histogram(binwidth = binwidth, alpha = 0.5, boundary = 0) +
+  use_label_col <- !is.null(label_col)
+
+  if (use_label_col) {
+    if (!is.null(label_levels)) {
+      label_levels <- as.character(label_levels)
+      plot_long[[label_col]] <- factor(plot_long[[label_col]], levels = label_levels)
+    }
+
+    label_levels_data <- plot_long[[label_col]]
+    label_levels_data <- if (is.factor(label_levels_data)) levels(label_levels_data) else unique(as.character(label_levels_data))
+    label_levels_use <- label_levels %||% label_levels_data
+
+    if (is.null(label_colors)) {
+      if (!requireNamespace("pals", quietly = TRUE)) {
+        stop("Please install pals to use the default high-contrast palette in plot_score_hist().")
+      }
+      label_colors <- as.vector(pals::polychrome(length(label_levels_use)))
+      names(label_colors) <- label_levels_use
+    } else {
+      if (length(label_colors) != length(label_levels_use)) {
+        stop("label_colors must be the same length as the label levels when provided.")
+      }
+      if (is.null(names(label_colors))) {
+        names(label_colors) <- label_levels_use
+      }
+    }
+  }
+
+  p <- ggplot2::ggplot(plot_long, ggplot2::aes(x = .data$scores))
+
+  if (use_label_col) {
+    p <- p + ggplot2::geom_histogram(
+      ggplot2::aes(fill = .data[[label_col]]),
+      binwidth = binwidth,
+      alpha = 0.6,
+      boundary = 0,
+      position = "stack"
+    ) +
+      ggplot2::scale_fill_manual(values = label_colors, drop = drop_levels, limits = label_levels_use)
+  } else {
+    p <- p + ggplot2::geom_histogram(binwidth = binwidth, alpha = 0.5, boundary = 0)
+  }
+
+  p +
     {if (nrow(cutoff_df)) ggplot2::geom_vline(data = cutoff_df, ggplot2::aes(xintercept = .data$cutoff),
                                               color = "red") else NULL} +
-    ggplot2::facet_wrap(~.data$cell_type, scales = "free_y", axes = "all") +
+    ggplot2::facet_wrap(stats::as.formula(paste("~", prob_name_col)), scales = "free_y", axes = "all") +
     ggplot2::theme_classic() +
     ggplot2::labs(title = "Histograms of Probability for Each Cell Type",
                   subtitle = subtitle_txt,
-                  x = "Scores",
+            x = "Score",
                   y = "Count") +
     ggplot2::theme(
       strip.background = ggplot2::element_blank(),
@@ -1481,7 +1760,7 @@ plot_pseudobulk_heatmap <- function(spe,
       ct <- neg_map$cell_type[i]
       markers <- intersect(extract_markers(neg_map$neg_markers[i]), row_order)
       if (!length(markers)) return(NULL)
-      data.frame(label = ct, marker = markers, outline_color = "#ff0000")
+      data.frame(label = ct, marker = markers, outline_color = "#ff00f7")
     })
 
     highlight_df <- dplyr::bind_rows(neg_rows, pos_rows)
@@ -1571,6 +1850,11 @@ plot_pseudobulk_heatmap <- function(spe,
       show.legend = FALSE
     )
   }
-  p
-}
+  print(p)
 
+  return(
+    list(
+      plot = p, plot_df = plot_df
+    )
+  )
+}
