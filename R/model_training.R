@@ -156,6 +156,7 @@ custom_labels <- function(spe,
 #' @return List with `model`, `metrics` (CV confusion_matrix, accuracy,
 #'   f1_macro, cv_overall), `test_pred`/`test_truth` (pooled CV predictions and
 #'   truths), and `cv_overall`/`cv_class_metrics` per fold.
+#' @importFrom stats predict
 #' @export
 train_custom_rf <- function(spe,
                             label_col = "custom_label",
@@ -265,9 +266,10 @@ train_custom_rf <- function(spe,
       fold = k
     ) |>
       dplyr::mutate(
-        precision = ifelse(tp + fp == 0, 0, tp / (tp + fp)),
-        recall = ifelse(tp + fn == 0, 0, tp / (tp + fn)),
-        f1 = ifelse(precision + recall == 0, 0, 2 * precision * recall / (precision + recall))
+        precision = ifelse(.data$tp + .data$fp == 0, 0, .data$tp / (.data$tp + .data$fp)),
+        recall    = ifelse(.data$tp + .data$fn == 0, 0, .data$tp / (.data$tp + .data$fn)),
+        f1        = ifelse(.data$precision + .data$recall == 0, 0,
+                           2 * .data$precision * .data$recall / (.data$precision + .data$recall))
       )
   }
 
@@ -321,6 +323,7 @@ train_custom_rf <- function(spe,
 #'
 #' @return Data frame with columns `class`, `tp`, `fp`, `fn`, `support`,
 #'   `precision`, `recall`, `f1`, and optionally `fold` when sourced from CV.
+#' @importFrom rlang .data
 #' @export
 class_metrics_from_fit <- function(fit, test_truth = NULL, test_pred = NULL) {
   if (!is.null(fit$cv_class_metrics)) {
@@ -328,7 +331,7 @@ class_metrics_from_fit <- function(fit, test_truth = NULL, test_pred = NULL) {
   }
 
   truth <- test_truth %||% fit$test_truth
-  pred <- test_pred %||% fit$test_pred
+  pred  <- test_pred  %||% fit$test_pred
 
   if (is.null(truth) || is.null(pred)) {
     stop("No class metrics available: provide test_truth/test_pred or ensure fit contains them.")
@@ -343,9 +346,10 @@ class_metrics_from_fit <- function(fit, test_truth = NULL, test_pred = NULL) {
     support = sapply(classes, function(cls) sum(truth == cls))
   ) |>
     dplyr::mutate(
-      precision = ifelse(tp + fp == 0, 0, tp / (tp + fp)),
-      recall = ifelse(tp + fn == 0, 0, tp / (tp + fn)),
-      f1 = ifelse(precision + recall == 0, 0, 2 * precision * recall / (precision + recall))
+      precision = ifelse(.data$tp + .data$fp == 0, 0, .data$tp / (.data$tp + .data$fp)),
+      recall    = ifelse(.data$tp + .data$fn == 0, 0, .data$tp / (.data$tp + .data$fn)),
+      f1        = ifelse(.data$precision + .data$recall == 0, 0,
+                         2 * .data$precision * .data$recall / (.data$precision + .data$recall))
     )
 
   out
@@ -467,6 +471,7 @@ label_agreement_rates <- function(spe,
 #' @param unknown_label Label value to treat as missing (default "Unknown").
 #'
 #' @return The input `spe` with updated `colData` columns.
+#' @importFrom stats predict
 #' @export
 predict_unknown_with_rf <- function(spe,
                                     model,
@@ -514,11 +519,12 @@ predict_unknown_with_rf <- function(spe,
 #' and per-class statistics in both tabular and text-friendly formats.
 #'
 #' @param fit List returned by [train_custom_rf()].
-#' @param digits Number of digits when formatting text output (default 3).
+#'
 #'
 #' @return `rf_metric_table()` returns a list of tables: `overall`,
 #'   `cv_overall`, `cv_overall_summary`, `class`, and `class_raw`.
 #'   `rf_metric_text()` returns a character vector of summary lines.
+#' @importFrom rlang .data
 #' @export
 rf_metric_table <- function(fit) {
   if (is.null(fit$metrics)) stop("fit must contain a metrics element.")
@@ -535,10 +541,10 @@ rf_metric_table <- function(fit) {
   if (!is.null(metrics$cv_overall) && nrow(metrics$cv_overall) > 0) {
     cv_overall_summary <- metrics$cv_overall |>
       dplyr::summarise(
-        accuracy_mean = mean(accuracy, na.rm = TRUE),
-        accuracy_sd = stats::sd(accuracy, na.rm = TRUE),
-        f1_macro_mean = mean(f1_macro, na.rm = TRUE),
-        f1_macro_sd = stats::sd(f1_macro, na.rm = TRUE)
+        accuracy_mean = mean(.data$accuracy, na.rm = TRUE),
+        accuracy_sd   = stats::sd(.data$accuracy, na.rm = TRUE),
+        f1_macro_mean = mean(.data$f1_macro, na.rm = TRUE),
+        f1_macro_sd   = stats::sd(.data$f1_macro, na.rm = TRUE)
       )
   }
 
@@ -547,12 +553,12 @@ rf_metric_table <- function(fit) {
   class_summary <- class_metrics
   if ("fold" %in% colnames(class_metrics)) {
     class_summary <- class_metrics |>
-      dplyr::group_by(class) |>
+      dplyr::group_by(.data$class) |>
       dplyr::summarise(
-        precision_mean = mean(precision, na.rm = TRUE),
-        recall_mean = mean(recall, na.rm = TRUE),
-        f1_mean = mean(f1, na.rm = TRUE),
-        support_mean = mean(support, na.rm = TRUE),
+        precision_mean = mean(.data$precision, na.rm = TRUE),
+        recall_mean    = mean(.data$recall, na.rm = TRUE),
+        f1_mean        = mean(.data$f1, na.rm = TRUE),
+        support_mean   = mean(.data$support, na.rm = TRUE),
         .groups = "drop"
       )
   }
@@ -566,7 +572,16 @@ rf_metric_table <- function(fit) {
   )
 }
 
-
+#' Text summary of random forest performance
+#'
+#' Formats key overall and cross-validation metrics from a fitted model
+#' returned by [train_custom_rf()] into a character vector of human-readable lines.
+#'
+#' @param fit List returned by [train_custom_rf()].
+#' @param digits Number of digits when formatting numeric values (default 3).
+#'
+#' @return A character vector of summary lines.
+#' @importFrom rlang .data
 #' @export
 rf_metric_text <- function(fit, digits = 3) {
   tbl <- rf_metric_table(fit)
@@ -584,8 +599,8 @@ rf_metric_text <- function(fit, digits = 3) {
     s <- tbl$cv_overall_summary
     lines <- c(
       lines,
-      paste0("CV accuracy (mean +/- sd): ", fmt(s$accuracy_mean), " ± ", fmt(s$accuracy_sd)),
-      paste0("CV F1 macro (mean +/- sd): ", fmt(s$f1_macro_mean), " ± ", fmt(s$f1_macro_sd))
+      paste0("CV accuracy (mean +/- sd): ", fmt(s$accuracy_mean), " +/- ", fmt(s$accuracy_sd)),
+      paste0("CV F1 macro (mean +/- sd): ", fmt(s$f1_macro_mean), " +/- ", fmt(s$f1_macro_sd))
     )
   }
 

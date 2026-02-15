@@ -2,21 +2,25 @@
 title: "Basics"
 editor: source
 author: Matthew
-date: "`r format(Sys.time(), '%B %d, %Y')`"
+date: "2026-02-15"
 params:
   evalc: TRUE
   show: 'as.is'
-format:  
-    html:
-      toc: true # table of content true
-      toc_depth: 3  # upto three depths of headings (specified by #, ## and ###)
-      number-sections: true  ## if you want number sections at each table header
-      theme: cerulean  # many options for theme, this one is my favorite.
-      highlight: tango  # specifies the syntax highlighting style
-      code-fold: false
-      code-tools: true
-      embed-resources: true
-      lightbox: true
+vignette: >
+  %\VignetteIndexEntry{Basic Pipeline}
+  %\VignetteEngine{quarto::quarto}
+  %\VignetteEncoding{UTF-8}
+format:
+  html:
+    toc: true
+    toc_depth: 3
+    number-sections: true
+    theme: cerulean
+    highlight: tango
+    code-fold: false
+    code-tools: true
+    embed-resources: true
+    lightbox: true
 ---
 
 # Basic Pipeline Graph
@@ -28,9 +32,9 @@ format:
 ## Load in the cytoGateR
 
 ```{r}
-devtools::document()
-devtools::load_all()
-devtools::install() # for if you want the package on system
+# devtools::document()
+# devtools::load_all()
+# devtools::install() # for if you want the package on system
 ```
 
 ## Other Libraries
@@ -41,6 +45,7 @@ suppressPackageStartupMessages({
   library(SpatialExperiment)
   library(ranger)
   library(imcdatasets)
+  library(cytoGateR)
 })
 ```
 
@@ -163,7 +168,7 @@ res_pub <- cytoGateR::run_tree_gating(
 ## Visualise Cutoffs (98% threshold)
 
 ```{r}
-plot_prob_hist(res_pub)
+plot_score_hist(res_pub)
 ```
 
 ## Apply Cutoff Rule

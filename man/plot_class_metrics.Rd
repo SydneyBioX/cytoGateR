@@ -15,6 +15,8 @@ plot_class_metrics(
 `f1`, optionally `support`, and optionally `fold` for cross-validation.}
 
 \item{title}{Plot title.}
+
+\item{subtitle}{Optional subtitle for the plot. If `NULL`, an automatic}
 }
 \value{
 A `ggplot` object.

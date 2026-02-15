@@ -21,9 +21,21 @@ columns `truth`, `pred`, and `Freq`.}
 
 \item{title}{Plot title.}
 
+\item{subtitle}{Optional subtitle for the plot. If `NULL`, an automatic
+subtitle is generated (aggregation flag, CV folds if provided, and total `n`).}
+
+\item{cv_folds}{Optional number of cross-validation folds to display in the subtitle.
+Use `NULL` to omit.}
+
+\item{aggregated}{Logical. If `TRUE`, indicates the confusion matrix is summed/aggregated
+(used for subtitle text only).}
+
 \item{fill_low}{Low-end color for the fill gradient.}
 
 \item{fill_high}{High-end color for the fill gradient.}
+
+\item{plot_marginals}{Logical. If `TRUE`, add an extra "TOTAL" row/column showing marginal
+totals and the grand total.}
 }
 \value{
 A `ggplot` object.

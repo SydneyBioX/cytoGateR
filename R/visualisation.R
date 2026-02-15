@@ -265,7 +265,14 @@ plot_celltype_tree <- function(tree, title = "") {
 #' @param title Plot title.
 #' @param fill_low Low-end color for the fill gradient.
 #' @param fill_high High-end color for the fill gradient.
-#'
+#' @param subtitle Optional subtitle for the plot. If `NULL`, an automatic
+#'   subtitle is generated (aggregation flag, CV folds if provided, and total `n`).
+#' @param cv_folds Optional number of cross-validation folds to display in the subtitle.
+#'   Use `NULL` to omit.
+#' @param aggregated Logical. If `TRUE`, indicates the confusion matrix is summed/aggregated
+#'   (used for subtitle text only).
+#' @param plot_marginals Logical. If `TRUE`, add an extra "TOTAL" row/column showing marginal
+#'   totals and the grand total.
 #' @return A `ggplot` object.
 #' @export
 plot_confusion_matrix <- function(conf_mat,
@@ -607,7 +614,7 @@ plot_marker_density <- function(spe,
 #' @param class_metrics Data frame with columns `class`, `precision`, `recall`,
 #'   `f1`, optionally `support`, and optionally `fold` for cross-validation.
 #' @param title Plot title.
-#'
+#' @param subtitle Optional subtitle for the plot. If `NULL`, an automatic
 #' @return A `ggplot` object.
 #' @export
 plot_class_metrics <- function(class_metrics, title = "Per-class precision/recall/F1", subtitle = NULL) {
@@ -660,7 +667,7 @@ plot_class_metrics <- function(class_metrics, title = "Per-class precision/recal
   total_n <- if ("support" %in% names(class_metrics)) sum(class_metrics$support, na.rm = TRUE) else NA_real_
   cv_txt <- if (has_folds) paste0("CV folds = ", length(unique(df$fold))) else NULL
   n_txt <- if (is.finite(total_n)) paste0("n = ", total_n) else NULL
-  subtitle_auto <- paste(na.omit(c(n_txt, cv_txt)), collapse = " | ")
+  subtitle_auto <- paste(stats::na.omit(c(n_txt, cv_txt)), collapse = " | ")
   subtitle <- subtitle %||% subtitle_auto
 
   p <- p +
@@ -849,7 +856,7 @@ plot_score_hist <- function(res,
   if (!requireNamespace("ggplot2", quietly = TRUE) ||
       !requireNamespace("dplyr", quietly = TRUE) ||
       !requireNamespace("tidyr", quietly = TRUE)) {
-    stop("Please install ggplot2, dplyr, and tidyr to use plot_prob_hist().")
+    stop("Please install ggplot2, dplyr, and tidyr to use plot_score_hist().")
   }
 
   if (is.null(res) || is.null(res$spe)) {
@@ -879,11 +886,11 @@ plot_score_hist <- function(res,
       cols = dplyr::all_of(prob_cols),
       names_to = "cell_type",
       names_prefix = prob_prefix,
-      values_to = "probability"
+      values_to = "scores"
     )
 
   if (drop_na) {
-    plot_long <- dplyr::filter(plot_long, !is.na(.data$probability))
+    plot_long <- dplyr::filter(plot_long, !is.na(.data$scores))
   }
 
   if (!nrow(plot_long)) {
@@ -898,7 +905,7 @@ plot_score_hist <- function(res,
     dplyr::group_by(.data$cell_type) |>
     dplyr::summarise(
       cutoff = {
-        val <- cutoff_fn(.data$probability)
+        val <- cutoff_fn(.data$scores)
         if (length(val) != 1 || !is.numeric(val)) {
           stop("cutoff_fn must return a single numeric value per cell type.")
         }
@@ -908,7 +915,7 @@ plot_score_hist <- function(res,
     ) |>
     dplyr::filter(is.finite(.data$cutoff))
 
-  ggplot2::ggplot(plot_long, ggplot2::aes(x = .data$probability)) +
+  ggplot2::ggplot(plot_long, ggplot2::aes(x = .data$scores)) +
     ggplot2::geom_histogram(binwidth = binwidth, alpha = 0.5, boundary = 0) +
     {if (nrow(cutoff_df)) ggplot2::geom_vline(data = cutoff_df, ggplot2::aes(xintercept = .data$cutoff),
                                               color = "red") else NULL} +
@@ -916,7 +923,7 @@ plot_score_hist <- function(res,
     ggplot2::theme_classic() +
     ggplot2::labs(title = "Histograms of Probability for Each Cell Type",
                   subtitle = subtitle_txt,
-                  x = "Probability",
+                  x = "Scores",
                   y = "Count") +
     ggplot2::theme(
       strip.background = ggplot2::element_blank(),
@@ -1054,7 +1061,7 @@ plot_labelled_cells <- function(spe,
     }
     image_index <- as.integer(image_index)
     if (any(image_index < 1L | image_index > length(image_values))) {
-      return(ggplot() + theme_void()) # return empty plot
+      return(ggplot() + ggplot2::theme_void()) # return empty plot
       # stop("image_index values must be between 1 and ", length(image_values), ".")
     }
     selected_images <- image_values[image_index]
@@ -1114,7 +1121,7 @@ plot_labelled_cells <- function(spe,
   }
 
   p <- p + ggplot2::scale_color_manual(values = label_colors, drop = drop_levels, limits = label_levels_use) +
-        guides(color = guide_legend(override.aes = list(size = 5)))
+    ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = 5)))
 
   p
 }
@@ -1266,6 +1273,7 @@ plot_label_dotplot <- function(spe,
 #' @param show_values Logical; draw mean values on tiles. Default TRUE.
 #' @param value_digits Digits for tile labels. Default 2.
 #' @param title Plot title. Default "Pseudobulk marker expression".
+#' @param text_size Numeric. Text size for numeric values drawn on heatmap tiles
 #'
 #' @return A `ggplot` object.
 #' @export

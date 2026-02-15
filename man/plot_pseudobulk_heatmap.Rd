@@ -78,6 +78,8 @@ blue-yellow-red diverging scale (pheatmap style). Set to a viridis option
 (e.g., "viridis", "magma") to use `ggplot2::scale_fill_viridis_c()`.}
 
 \item{heatmap_direction}{Direction for viridis palettes. Default 1.}
+
+\item{text_size}{Numeric. Text size for numeric values drawn on heatmap tiles}
 }
 \value{
 A `ggplot` object.

@@ -8,8 +8,6 @@ rf_metric_table(fit)
 }
 \arguments{
 \item{fit}{List returned by [train_custom_rf()].}
-
-\item{digits}{Number of digits when formatting text output (default 3).}
 }
 \value{
 `rf_metric_table()` returns a list of tables: `overall`,
