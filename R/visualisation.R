@@ -185,7 +185,7 @@ plot_ct_marker_intensity <- function(spe,
         binwidth = bw,
         fill = "grey70",
         color = "grey40",
-        alpha = 0.8,
+        alpha = 1,
         show.legend = FALSE
       ) +
       ggplot2::theme_classic()
@@ -1200,7 +1200,7 @@ plot_score_hist <- function(res,
                                               color = "red") else NULL} +
     ggplot2::facet_wrap(stats::as.formula(paste("~", prob_name_col)), scales = "free_y", axes = "all") +
     ggplot2::theme_classic() +
-    ggplot2::labs(title = "Histograms of Probability for Each Cell Type",
+    ggplot2::labs(title = "Histograms of Score for Each Cell Type",
                   subtitle = subtitle_txt,
             x = "Score",
                   y = "Count") +
