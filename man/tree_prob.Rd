@@ -9,7 +9,10 @@ tree_prob(
   expr_mat,
   cell_i,
   combine = c("mean", "product"),
-  neg_markers = character(0)
+  neg_markers = character(0),
+  marker_stats = NULL,
+  neg_strength = 0.8,
+  lambda = 2
 )
 }
 \arguments{
@@ -24,6 +27,16 @@ cells in columns.}
 or `"product"`.}
 
 \item{neg_markers}{Character vector of negative marker names used for penalty.}
+
+\item{marker_stats}{A list of marker statistics (including cutoff and scale)
+produced by [fit_marker_stats()] used to calculate the penalty.}
+
+\item{neg_strength}{Numeric scalar in [0,1] defining how strongly negative
+marker expression should penalize the final score. Default is 0.8.}
+
+\item{lambda}{Numeric scalar representing the "Skepticism Factor." Higher
+values place a heavier penalty on cell types defined by fewer markers.
+Default is 0.2.}
 }
 \value{
 Numeric scalar probability (typically in [0,1]) or `NA_real_` if no
@@ -31,6 +44,6 @@ Numeric scalar probability (typically in [0,1]) or `NA_real_` if no
 }
 \description{
 Compute the probability that a single cell belongs to a given cell type by
-combining per-node scores along a tree path and applying an optional negative
-marker penalty.
+combining per-node scores along a tree path, applying a complexity-based
+weight, and an optional negative marker penalty.
 }

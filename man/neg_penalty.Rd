@@ -4,7 +4,13 @@
 \alias{neg_penalty}
 \title{Negative marker penalty}
 \usage{
-neg_penalty(expr_mat, neg_markers, cell_i)
+neg_penalty(
+  expr_mat,
+  neg_markers,
+  cell_i,
+  marker_stats = NULL,
+  neg_strength = 0.8
+)
 }
 \arguments{
 \item{expr_mat}{Numeric matrix-like expression object with markers in rows and

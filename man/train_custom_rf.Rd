@@ -13,6 +13,7 @@ train_custom_rf(
   num.trees = 200,
   mtry = NULL,
   seed = NULL,
+  features = "lineage",
   cv_folds = 5
 )
 }

@@ -156,7 +156,6 @@ custom_labels <- function(spe,
 #' @return List with `model`, `metrics` (CV confusion_matrix, accuracy,
 #'   f1_macro, cv_overall), `test_pred`/`test_truth` (pooled CV predictions and
 #'   truths), and `cv_overall`/`cv_class_metrics` per fold.
-#' @importFrom stats predict
 #' @export
 train_custom_rf <- function(spe,
                             label_col = "custom_label",
@@ -166,6 +165,7 @@ train_custom_rf <- function(spe,
                             num.trees = 200,
                             mtry = NULL,
                             seed = NULL,
+                            features="lineage",
                             cv_folds = 5) {
   .assert_spe(spe)
   if (!label_col %in% colnames(SummarizedExperiment::colData(spe))) {
@@ -175,8 +175,45 @@ train_custom_rf <- function(spe,
     stop(paste0("Assay '", assay_name, "' not found in spe."))
   }
 
+
+
+  if (is.character(features)) {
+
+    if (length(features) == 1 && features %in% c("all")) {
+      # keyword mode
+      features_use <- rownames(feat_mat)
+    } else {
+      # explicit marker vector
+      features_use <- features
+    }
+
+  } else {
+    stop("features must be 'lineage', 'all', or a character vector of markers")
+  }
+
+
+
+
   lab_vec <- SummarizedExperiment::colData(spe)[[label_col]]
   feat_mat <- SummarizedExperiment::assay(spe, assay_name)
+
+
+
+
+  features_use <- unique(features_use)
+  present <- intersect(features_use, rownames(feat_mat))
+  missing <- setdiff(features_use, rownames(feat_mat))
+
+  if (length(present) < 1) {
+    stop("None of the requested features are present in the assay rownames().")
+  }
+  if (length(missing) > 0) {
+    warning("Dropping missing features (not found in rownames(assay)): ",
+            paste(head(missing, 20), collapse = ", "),
+            if (length(missing) > 20) paste0(" ... (+", length(missing) - 20, " more)") else "")
+  }
+
+  feat_mat <- feat_mat[present, , drop = FALSE]
 
   feature_df <- as.data.frame(t(feat_mat))
   feature_df$cell_id <- colnames(spe)
@@ -244,7 +281,7 @@ train_custom_rf <- function(spe,
       num.threads = max(1, parallel::detectCores(logical = FALSE))
     )
 
-    pred_k <- predict(model_k, test_k)$predictions
+    pred_k <- stats::predict(model_k, test_k)$predictions
     pred_k <- factor(pred_k, levels = levels(all_truth))
     truth_k <- test_k[[label_col]]
 
@@ -307,7 +344,8 @@ train_custom_rf <- function(spe,
     test_pred = all_pred,
     test_truth = all_truth,
     cv_overall = cv_overall,
-    cv_class_metrics = cv_class_metrics
+    cv_class_metrics = cv_class_metrics,
+    features_used = present   # NEW: return what was actually used
   )
 }
 
@@ -323,7 +361,6 @@ train_custom_rf <- function(spe,
 #'
 #' @return Data frame with columns `class`, `tp`, `fp`, `fn`, `support`,
 #'   `precision`, `recall`, `f1`, and optionally `fold` when sourced from CV.
-#' @importFrom rlang .data
 #' @export
 class_metrics_from_fit <- function(fit, test_truth = NULL, test_pred = NULL) {
   if (!is.null(fit$cv_class_metrics)) {
@@ -471,7 +508,6 @@ label_agreement_rates <- function(spe,
 #' @param unknown_label Label value to treat as missing (default "Unknown").
 #'
 #' @return The input `spe` with updated `colData` columns.
-#' @importFrom stats predict
 #' @export
 predict_unknown_with_rf <- function(spe,
                                     model,
@@ -500,7 +536,7 @@ predict_unknown_with_rf <- function(spe,
   }
   feature_df <- feature_df[, expected, drop = FALSE]
 
-  preds <- predict(model, feature_df)$predictions
+  preds <- stats::predict(model, feature_df)$predictions
 
   labels <- SummarizedExperiment::colData(spe)[[label_col]]
   filled <- labels
@@ -524,7 +560,6 @@ predict_unknown_with_rf <- function(spe,
 #' @return `rf_metric_table()` returns a list of tables: `overall`,
 #'   `cv_overall`, `cv_overall_summary`, `class`, and `class_raw`.
 #'   `rf_metric_text()` returns a character vector of summary lines.
-#' @importFrom rlang .data
 #' @export
 rf_metric_table <- function(fit) {
   if (is.null(fit$metrics)) stop("fit must contain a metrics element.")
@@ -581,7 +616,6 @@ rf_metric_table <- function(fit) {
 #' @param digits Number of digits when formatting numeric values (default 3).
 #'
 #' @return A character vector of summary lines.
-#' @importFrom rlang .data
 #' @export
 rf_metric_text <- function(fit, digits = 3) {
   tbl <- rf_metric_table(fit)

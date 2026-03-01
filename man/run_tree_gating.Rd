@@ -12,6 +12,7 @@ run_tree_gating(
   min_cells = 200,
   min_score = 0.5,
   uncert_thresh = 0.25,
+  neg_strength = 0.4,
   cutoff_method = c("mean", "equal_posteriors"),
   gmm_model_names = NULL,
   parallel = FALSE,

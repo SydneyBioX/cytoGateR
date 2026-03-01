@@ -107,6 +107,7 @@ run_tree_gating <- function(spe,
                             min_cells = 200,
                             min_score = 0.5,
                             uncert_thresh = 0.25,
+                            neg_strength = 0.4, # <--- ADD HERE
                             cutoff_method = c("mean", "equal_posteriors"),
                             gmm_model_names = NULL,
                             parallel = FALSE,
@@ -117,6 +118,12 @@ run_tree_gating <- function(spe,
   .assert_lineage_table(lineage_table)
 
   lineage_table <- .clean_lineage_table(lineage_table, spe)
+
+  # --- ADD THIS LINE ---
+  # Pre-calculate stats for all markers used in the lineage table
+  all_markers <- unique(unlist(c(lineage_table$pos_markers, lineage_table$neg_markers))) #
+  marker_stats <- fit_marker_stats(spe, all_markers, assay_name = assay_name) #
+
 
   expr_norm <- SummarizedExperiment::assay(spe, assay_name)
 
@@ -167,10 +174,25 @@ run_tree_gating <- function(spe,
 
   trees <- setNames(trees, lineage_table$cell_type)
 
+  # prob_mat <- sapply(names(trees), function(ct) {
+  #   neg <- lineage_table$neg_markers[lineage_table$cell_type == ct][[1]] %||% character(0)
+  #   vapply(seq_len(ncol(expr_norm)), function(i) {
+  #     tree_prob(trees[[ct]], expr_norm, i, combine = "mean", neg_markers = neg)
+  #   }, numeric(1))
+  # })
+
   prob_mat <- sapply(names(trees), function(ct) {
     neg <- lineage_table$neg_markers[lineage_table$cell_type == ct][[1]] %||% character(0)
     vapply(seq_len(ncol(expr_norm)), function(i) {
-      tree_prob(trees[[ct]], expr_norm, i, combine = "mean", neg_markers = neg)
+      tree_prob(
+        trees[[ct]],
+        expr_norm,
+        i,
+        combine = "mean",
+        neg_markers = neg,
+        marker_stats = marker_stats,
+        neg_strength = neg_strength # <--- PASS HERE
+      )
     }, numeric(1))
   })
 

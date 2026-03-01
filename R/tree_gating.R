@@ -262,6 +262,7 @@ collect_path_scores <- function(tree, expr_mat, cell_i) {
 #' negative markers for a given cell. Higher negative-marker expression leads
 #' to stronger penalty (smaller value).
 #'
+#'
 #' @param expr_mat Numeric matrix-like expression object with markers in rows and
 #'   cells in columns.
 #' @param neg_markers Character vector of marker names to penalize.
@@ -269,23 +270,44 @@ collect_path_scores <- function(tree, expr_mat, cell_i) {
 #'
 #' @return A numeric scalar in [0,1] representing the penalty factor.
 #' @export
-neg_penalty <- function(expr_mat, neg_markers, cell_i) {
-  neg_markers <- intersect(neg_markers, rownames(expr_mat))
+
+
+neg_penalty <- function(expr_mat, neg_markers, cell_i, marker_stats = NULL, neg_strength = 0.8) {
+  neg_markers <- intersect(neg_markers, names(marker_stats))
   if (length(neg_markers) == 0) return(1)
 
-  x <- as.numeric(expr_mat[neg_markers, cell_i])
-  x <- x[is.finite(x)]
-  if (length(x) == 0) return(1)
+  penalty <- 1
+  for (m in neg_markers) {
+    st <- marker_stats[[m]]
+    x <- as.numeric(expr_mat[m, cell_i])
 
-  p <- 1 - mean(x, na.rm = TRUE)
-  max(min(p, 1), 0)
+    if (is.finite(x)) {
+      # Use existing logistic scoring function to get p_bad
+      p_bad <- score_marker_logistic(x, st$cutoff, st$scale)
+      penalty <- penalty * (1 - (p_bad * neg_strength))
+    }
+  }
+
+  return(max(min(penalty, 1), 0))
 }
+
+# neg_penalty <- function(expr_mat, neg_markers, cell_i) {
+#   neg_markers <- intersect(neg_markers, rownames(expr_mat))
+#   if (length(neg_markers) == 0) return(1)
+#
+#   x <- as.numeric(expr_mat[neg_markers, cell_i])
+#   x <- x[is.finite(x)]
+#   if (length(x) == 0) return(1)
+#
+#   p <- 1 - mean(x, na.rm = TRUE)
+#   max(min(p, 1), 0)
+# }
 
 #' Tree probability for one cell
 #'
 #' Compute the probability that a single cell belongs to a given cell type by
-#' combining per-node scores along a tree path and applying an optional negative
-#' marker penalty.
+#' combining per-node scores along a tree path, applying a complexity-based
+#' weight, and an optional negative marker penalty.
 #'
 #' @param tree A gating tree as produced by [build_fullcoverage_tree()].
 #' @param expr_mat Numeric matrix-like expression object with markers in rows and
@@ -294,13 +316,23 @@ neg_penalty <- function(expr_mat, neg_markers, cell_i) {
 #' @param combine How to combine node-wise scores along the path. One of `"mean"`
 #'   or `"product"`.
 #' @param neg_markers Character vector of negative marker names used for penalty.
+#' @param marker_stats A list of marker statistics (including cutoff and scale)
+#'   produced by [fit_marker_stats()] used to calculate the penalty.
+#' @param neg_strength Numeric scalar in [0,1] defining how strongly negative
+#'   marker expression should penalize the final score. Default is 0.8.
+#' @param lambda Numeric scalar representing the "Skepticism Factor." Higher
+#'   values place a heavier penalty on cell types defined by fewer markers.
+#'   Default is 0.2.
 #'
 #' @return Numeric scalar probability (typically in [0,1]) or `NA_real_` if no
 #'   usable node scores are available for the cell.
 #' @export
 tree_prob <- function(tree, expr_mat, cell_i,
                       combine = c("mean", "product"),
-                      neg_markers = character(0)) {
+                      neg_markers = character(0),
+                      marker_stats = NULL, # Add this
+                      neg_strength = 0.8,
+                      lambda = 2) { # Add this
   combine <- match.arg(combine)
   s <- collect_path_scores(tree, expr_mat, cell_i)
   s <- s[is.finite(s)]
@@ -308,6 +340,12 @@ tree_prob <- function(tree, expr_mat, cell_i,
   if (length(s) == 0) return(NA_real_)
 
   base <- if (combine == "mean") mean(s) else prod(s)
-  base * neg_penalty(expr_mat, neg_markers, cell_i)
+
+  n <- length(s)
+  complexity_weight <- n / (n + lambda)
+  # Pass marker_stats and strength to the new penalty function
+  # base * neg_penalty(expr_mat, neg_markers, cell_i, marker_stats, neg_strength)
+  # base * neg_penalty(expr_mat, neg_markers, cell_i)
+  (base * complexity_weight) * neg_penalty(expr_mat, neg_markers, cell_i, marker_stats, neg_strength)
 }
 
