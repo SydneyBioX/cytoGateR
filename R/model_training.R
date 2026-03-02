@@ -157,197 +157,444 @@ custom_labels <- function(spe,
 #'   f1_macro, cv_overall), `test_pred`/`test_truth` (pooled CV predictions and
 #'   truths), and `cv_overall`/`cv_class_metrics` per fold.
 #' @export
-train_custom_rf <- function(spe,
-                            label_col = "custom_label",
-                            assay_name = "norm",
-                            unknown_label = "Unknown",
-                            train_frac = 0.8,
-                            num.trees = 200,
-                            mtry = NULL,
-                            seed = NULL,
-                            features="lineage",
-                            cv_folds = 5) {
-  .assert_spe(spe)
-  if (!label_col %in% colnames(SummarizedExperiment::colData(spe))) {
-    stop("label_col not found in colData(spe).")
-  }
-  if (!assay_name %in% SummarizedExperiment::assayNames(spe)) {
-    stop(paste0("Assay '", assay_name, "' not found in spe."))
-  }
+# train_custom_rf <- function(spe,
+#                             label_col = "custom_label",
+#                             assay_name = "norm",
+#                             unknown_label = "Unknown",
+#                             train_frac = 0.8,
+#                             num.trees = 200,
+#                             mtry = NULL,
+#                             seed = NULL,
+#                             features="lineage",
+#                             cv_folds = 5) {
+#   .assert_spe(spe)
+#   if (!label_col %in% colnames(SummarizedExperiment::colData(spe))) {
+#     stop("label_col not found in colData(spe).")
+#   }
+#   if (!assay_name %in% SummarizedExperiment::assayNames(spe)) {
+#     stop(paste0("Assay '", assay_name, "' not found in spe."))
+#   }
+#
+#
+#
+#   if (is.character(features)) {
+#
+#     if (length(features) == 1 && features %in% c("all")) {
+#       # keyword mode
+#       features_use <- rownames(feat_mat)
+#     } else {
+#       # explicit marker vector
+#       features_use <- features
+#     }
+#
+#   } else {
+#     stop("features must be 'lineage', 'all', or a character vector of markers")
+#   }
+#
+#
+#
+#
+#   lab_vec <- SummarizedExperiment::colData(spe)[[label_col]]
+#   feat_mat <- SummarizedExperiment::assay(spe, assay_name)
+#
+#
+#
+#
+#   features_use <- unique(features_use)
+#   present <- intersect(features_use, rownames(feat_mat))
+#   missing <- setdiff(features_use, rownames(feat_mat))
+#
+#   if (length(present) < 1) {
+#     stop("None of the requested features are present in the assay rownames().")
+#   }
+#   if (length(missing) > 0) {
+#     warning("Dropping missing features (not found in rownames(assay)): ",
+#             paste(head(missing, 20), collapse = ", "),
+#             if (length(missing) > 20) paste0(" ... (+", length(missing) - 20, " more)") else "")
+#   }
+#
+#   feat_mat <- feat_mat[present, , drop = FALSE]
+#
+#   feature_df <- as.data.frame(t(feat_mat))
+#   feature_df$cell_id <- colnames(spe)
+#
+#   df <- feature_df
+#   df[[label_col]] <- lab_vec
+#
+#   labelled_df <- df[!(is.na(df[[label_col]]) | df[[label_col]] == unknown_label), , drop = FALSE]
+#
+#   if (nrow(labelled_df) < 2) stop("Not enough labelled cells to train model.")
+#
+#   labelled_df[[label_col]] <- factor(labelled_df[[label_col]])
+#   n_classes <- nlevels(labelled_df[[label_col]])
+#   if (n_classes < 2) stop("At least two classes are required to train the model.")
+#
+#   if (!is.null(seed)) set.seed(seed)
+#
+#   p <- ncol(labelled_df) - 2  # exclude cell_id and label
+#   if (p < 1) stop("Feature matrix has zero columns; cannot train model.")
+#   mtry_val <- if (is.null(mtry)) max(1, floor(sqrt(p))) else mtry
+#
+#   # Cross-validation always (degenerate case cv_folds = 1 allowed)
+#   cv_folds <- max(1, min(cv_folds, nrow(labelled_df)))
+#   fold_assign <- integer(nrow(labelled_df))
+#   for (cls in levels(labelled_df[[label_col]])) {
+#     idx <- which(labelled_df[[label_col]] == cls)
+#     fold_ids <- rep(seq_len(cv_folds), length.out = length(idx))
+#     fold_assign[idx] <- sample(fold_ids)
+#   }
+#
+#   formula <- stats::as.formula(paste(label_col, "~ ."))
+#
+#   f1_macro <- function(truth, pred) {
+#     classes <- union(levels(truth), levels(pred))
+#     f1s <- sapply(classes, function(cls) {
+#       tp <- sum(truth == cls & pred == cls)
+#       fp <- sum(truth != cls & pred == cls)
+#       fn <- sum(truth == cls & pred != cls)
+#       prec <- ifelse(tp + fp == 0, 0, tp / (tp + fp))
+#       rec <- ifelse(tp + fn == 0, 0, tp / (tp + fn))
+#       ifelse(prec + rec == 0, 0, 2 * prec * rec / (prec + rec))
+#     })
+#     mean(f1s)
+#   }
+#
+#   overall_list <- vector("list", cv_folds)
+#   class_list <- vector("list", cv_folds)
+#   all_truth <- labelled_df[[label_col]]
+#   all_pred <- factor(rep(NA_character_, nrow(labelled_df)), levels = levels(all_truth))
+#
+#   for (k in seq_len(cv_folds)) {
+#     train_k <- labelled_df[fold_assign != k, , drop = FALSE]
+#     test_k  <- labelled_df[fold_assign == k, , drop = FALSE]
+#
+#     if (nrow(train_k) < 2 || nrow(test_k) < 1) next
+#
+#     train_k$cell_id <- NULL
+#     test_k$cell_id <- NULL
+#
+#     model_k <- ranger::ranger(
+#       formula,
+#       data = train_k,
+#       num.trees = num.trees,
+#       mtry = mtry_val,
+#       num.threads = max(1, parallel::detectCores(logical = FALSE))
+#     )
+#
+#     pred_k <- stats::predict(model_k, test_k)$predictions
+#     pred_k <- factor(pred_k, levels = levels(all_truth))
+#     truth_k <- test_k[[label_col]]
+#
+#     all_pred[fold_assign == k] <- pred_k
+#
+#     overall_list[[k]] <- data.frame(
+#       fold = k,
+#       accuracy = mean(pred_k == truth_k),
+#       f1_macro = f1_macro(truth_k, pred_k)
+#     )
+#
+#     classes <- union(levels(truth_k), levels(pred_k))
+#     class_list[[k]] <- data.frame(
+#       class = factor(classes, levels = classes),
+#       tp = sapply(classes, function(cls) sum(truth_k == cls & pred_k == cls)),
+#       fp = sapply(classes, function(cls) sum(truth_k != cls & pred_k == cls)),
+#       fn = sapply(classes, function(cls) sum(truth_k == cls & pred_k != cls)),
+#       support = sapply(classes, function(cls) sum(truth_k == cls)),
+#       fold = k
+#     ) |>
+#       dplyr::mutate(
+#         precision = ifelse(.data$tp + .data$fp == 0, 0, .data$tp / (.data$tp + .data$fp)),
+#         recall    = ifelse(.data$tp + .data$fn == 0, 0, .data$tp / (.data$tp + .data$fn)),
+#         f1        = ifelse(.data$precision + .data$recall == 0, 0,
+#                            2 * .data$precision * .data$recall / (.data$precision + .data$recall))
+#       )
+#   }
+#
+#   overall_list <- Filter(Negate(is.null), overall_list)
+#   class_list <- Filter(Negate(is.null), class_list)
+#   cv_overall <- if (length(overall_list)) dplyr::bind_rows(overall_list) else NULL
+#   cv_class_metrics <- if (length(class_list)) dplyr::bind_rows(class_list) else NULL
+#
+#   # Aggregate CV predictions for summary metrics
+#   confusion_cv <- table(truth = all_truth, pred = all_pred)
+#   acc_cv <- mean(all_truth == all_pred, na.rm = TRUE)
+#   f1_cv <- if (any(is.na(all_pred))) NA_real_ else f1_macro(all_truth, all_pred)
+#
+#   metrics <- list(
+#     confusion_matrix = confusion_cv,
+#     accuracy = acc_cv,
+#     f1_macro = f1_cv,
+#     cv_overall = cv_overall
+#   )
+#
+#   # Train final model on all labelled data
+#   train_all <- labelled_df
+#   train_all$cell_id <- NULL
+#   final_model <- ranger::ranger(
+#     formula,
+#     data = train_all,
+#     num.trees = num.trees,
+#     mtry = mtry_val,
+#     num.threads = max(1, parallel::detectCores(logical = FALSE))
+#   )
+#
+#   list(
+#     model = final_model,
+#     metrics = metrics,
+#     test_pred = all_pred,
+#     test_truth = all_truth,
+#     cv_overall = cv_overall,
+#     cv_class_metrics = cv_class_metrics,
+#     features_used = present   # NEW: return what was actually used
+#   )
+# }
+# train_custom_randomforest <- function(spe,
+#                                       label_col = "cutoff_label",
+#                                       assay_name = "norm",
+#                                       unknown_label = "Unknown",
+#                                       num.trees = 200,
+#                                       mtry = NULL,
+#                                       seed = NULL,
+#                                       features = "all",
+#                                       cv_folds = 5,
+#                                       repeats = 10,
+#                                       agreement_thresh = 0.8) {
+#
+#   cytoGateR:::.assert_spe(spe)
+#
+#   # 1. Feature Selection Logic
+#   feat_mat_all <- SummarizedExperiment::assay(spe, assay_name)
+#
+#   if (is.character(features)) {
+#     if (length(features) == 1 && features == "all") {
+#       features_use <- rownames(feat_mat_all)
+#     } else {
+#       features_use <- intersect(features, rownames(feat_mat_all))
+#     }
+#   } else {
+#     stop("features must be 'all' or a character vector of markers.")
+#   }
+#
+#   if (length(features_use) < 1) stop("No valid features selected.")
+#
+#   # 2. Prepare Data
+#   lab_vec <- SummarizedExperiment::colData(spe)[[label_col]]
+#   feature_df <- as.data.frame(t(feat_mat_all[features_use, , drop = FALSE]))
+#   feature_df$original_label <- lab_vec
+#
+#   # Identify index of core cells (those not labeled Unknown)
+#   core_idx <- which(feature_df$original_label != unknown_label & !is.na(feature_df$original_label))
+#   if (length(core_idx) < 10) stop("Not enough core cells for CV cleaning.")
+#
+#   core_df <- feature_df[core_idx, ]
+#   core_df$original_label <- factor(core_df$original_label)
+#
+#   # 3. Repeated k-Fold CV for Label Cleaning
+#   if (!is.null(seed)) set.seed(seed)
+#   match_counts <- setNames(numeric(nrow(core_df)), rownames(core_df))
+#
+#   message(sprintf("Starting label cleaning: %d repeats of %d-fold CV...", repeats, cv_folds))
+#
+#   for (r in seq_len(repeats)) {
+#     message(sprintf("Repeat: %d",r))
+#     fold_assign <- integer(nrow(core_df))
+#     for (cls in levels(core_df$original_label)) {
+#       cls_idx <- which(core_df$original_label == cls)
+#       fold_assign[cls_idx] <- sample(rep(seq_len(cv_folds), length.out = length(cls_idx)))
+#     }
+#
+#     for (k in seq_len(cv_folds)) {
+#       train_idx <- which(fold_assign != k)
+#       test_idx  <- which(fold_assign == k)
+#
+#       temp_model <- ranger::ranger(
+#         original_label ~ .,
+#         data = core_df[train_idx, ],
+#         num.trees = 100,
+#         num.threads = max(1, parallel::detectCores(logical = FALSE))
+#       )
+#
+#       preds <- stats::predict(temp_model, core_df[test_idx, ])$predictions
+#       is_match <- (preds == core_df$original_label[test_idx])
+#       match_counts[test_idx] <- match_counts[test_idx] + as.numeric(is_match)
+#     }
+#   }
+#
+#   # 4. Filter Core Cells based on Consensus
+#   agreement_rate <- match_counts / repeats
+#   # Logic: Keep if agreement >= threshold
+#   valid_core_names <- names(agreement_rate)[agreement_rate >= agreement_thresh]
+#   inconsistent_names <- names(agreement_rate)[agreement_rate < agreement_thresh]
+#
+#   # Update labels in the SPE object
+#   cleaned_labels <- lab_vec
+#   # Match by cell names (colnames of SPE)
+#   cleaned_labels[colnames(spe) %in% inconsistent_names] <- unknown_label
+#   SummarizedExperiment::colData(spe)$cleaned_core_label <- cleaned_labels
+#
+#   message(sprintf("Cleaning complete. Removed %d inconsistent core cells.",
+#                   length(inconsistent_names)))
+#
+#   # 5. Final Model Training on Cleaned Set
+#   final_train_df <- core_df[valid_core_names, ]
+#
+#   # Handle mtry default if NULL
+#   mtry_val <- if (is.null(mtry)) floor(sqrt(length(features_use))) else mtry
+#
+#   final_model <- ranger::ranger(
+#     original_label ~ .,
+#     data = final_train_df,
+#     num.trees = num.trees,
+#     mtry = mtry_val,probability = TRUE,
+#     num.threads = max(1, parallel::detectCores(logical = FALSE))
+#   )
+#
+#   # 6. Reporting and Return
+#   return(list(
+#     spe = spe,
+#     model = final_model,
+#     features_used = features_use,
+#     agreement_rates = agreement_rate,
+#     cleaned_core_names = valid_core_names
+#   ))
+# }
 
-
-
-  if (is.character(features)) {
-
-    if (length(features) == 1 && features %in% c("all")) {
-      # keyword mode
-      features_use <- rownames(feat_mat)
-    } else {
-      # explicit marker vector
-      features_use <- features
-    }
-
-  } else {
-    stop("features must be 'lineage', 'all', or a character vector of markers")
-  }
-
-
-
-
-  lab_vec <- SummarizedExperiment::colData(spe)[[label_col]]
-  feat_mat <- SummarizedExperiment::assay(spe, assay_name)
-
-
-
-
-  features_use <- unique(features_use)
-  present <- intersect(features_use, rownames(feat_mat))
-  missing <- setdiff(features_use, rownames(feat_mat))
-
-  if (length(present) < 1) {
-    stop("None of the requested features are present in the assay rownames().")
-  }
-  if (length(missing) > 0) {
-    warning("Dropping missing features (not found in rownames(assay)): ",
-            paste(head(missing, 20), collapse = ", "),
-            if (length(missing) > 20) paste0(" ... (+", length(missing) - 20, " more)") else "")
-  }
-
-  feat_mat <- feat_mat[present, , drop = FALSE]
-
-  feature_df <- as.data.frame(t(feat_mat))
-  feature_df$cell_id <- colnames(spe)
-
-  df <- feature_df
-  df[[label_col]] <- lab_vec
-
-  labelled_df <- df[!(is.na(df[[label_col]]) | df[[label_col]] == unknown_label), , drop = FALSE]
-
-  if (nrow(labelled_df) < 2) stop("Not enough labelled cells to train model.")
-
-  labelled_df[[label_col]] <- factor(labelled_df[[label_col]])
-  n_classes <- nlevels(labelled_df[[label_col]])
-  if (n_classes < 2) stop("At least two classes are required to train the model.")
+train_custom_randomforest <- function(spe,
+                                      label_col = "cutoff_label",
+                                      assay_name = "norm",
+                                      unknown_label = "Unknown",
+                                      num.trees = 200,
+                                      mtry = NULL,
+                                      seed = NULL,
+                                      features = "all",
+                                      cv_folds = 5,
+                                      repeats = 10,
+                                      agreement_thresh = 0.8) {
 
   if (!is.null(seed)) set.seed(seed)
+  cytoGateR:::.assert_spe(spe)
 
-  p <- ncol(labelled_df) - 2  # exclude cell_id and label
-  if (p < 1) stop("Feature matrix has zero columns; cannot train model.")
-  mtry_val <- if (is.null(mtry)) max(1, floor(sqrt(p))) else mtry
+  # 1. Feature Prep
+  feat_mat_all <- SummarizedExperiment::assay(spe, assay_name)
+  features_use <- if (length(features) == 1 && features == "all") rownames(feat_mat_all) else intersect(features, rownames(feat_mat_all))
 
-  # Cross-validation always (degenerate case cv_folds = 1 allowed)
-  cv_folds <- max(1, min(cv_folds, nrow(labelled_df)))
-  fold_assign <- integer(nrow(labelled_df))
-  for (cls in levels(labelled_df[[label_col]])) {
-    idx <- which(labelled_df[[label_col]] == cls)
-    fold_ids <- rep(seq_len(cv_folds), length.out = length(idx))
-    fold_assign[idx] <- sample(fold_ids)
-  }
+  lab_vec <- SummarizedExperiment::colData(spe)[[label_col]]
+  feature_df <- as.data.frame(t(feat_mat_all[features_use, , drop = FALSE]))
 
-  formula <- stats::as.formula(paste(label_col, "~ ."))
+  # Filter only labelled cells for training/cleaning
+  core_idx <- which(lab_vec != unknown_label & !is.na(lab_vec))
+  core_df <- feature_df[core_idx, ]
+  core_df$original_label <- factor(lab_vec[core_idx])
 
+  # --- HELPER: F1 MACRO ---
   f1_macro <- function(truth, pred) {
-    classes <- union(levels(truth), levels(pred))
+    classes <- levels(truth)
     f1s <- sapply(classes, function(cls) {
       tp <- sum(truth == cls & pred == cls)
       fp <- sum(truth != cls & pred == cls)
       fn <- sum(truth == cls & pred != cls)
-      prec <- ifelse(tp + fp == 0, 0, tp / (tp + fp))
-      rec <- ifelse(tp + fn == 0, 0, tp / (tp + fn))
-      ifelse(prec + rec == 0, 0, 2 * prec * rec / (prec + rec))
+      prec <- if(tp + fp == 0) 0 else tp / (tp + fp)
+      rec  <- if(tp + fn == 0) 0 else tp / (tp + fn)
+      if(prec + rec == 0) 0 else 2 * (prec * rec) / (prec + rec)
     })
-    mean(f1s)
+    return(f1s) # Returns vector for all classes
   }
 
-  overall_list <- vector("list", cv_folds)
-  class_list <- vector("list", cv_folds)
-  all_truth <- labelled_df[[label_col]]
-  all_pred <- factor(rep(NA_character_, nrow(labelled_df)), levels = levels(all_truth))
+  # --- STAGE 1: CONSENSUS CLEANING LOOP ---
+  message(sprintf("Stage 1: Cleaning labels via %d repeats...", repeats))
+  match_counts <- setNames(numeric(nrow(core_df)), rownames(core_df))
+
+  for (r in seq_len(repeats)) {
+    fold_assign <- integer(nrow(core_df))
+    for (cls in levels(core_df$original_label)) {
+      cls_idx <- which(core_df$original_label == cls)
+      fold_assign[cls_idx] <- sample(rep(seq_len(cv_folds), length.out = length(cls_idx)))
+    }
+    for (k in seq_len(cv_folds)) {
+      train_idx <- which(fold_assign != k); test_idx <- which(fold_assign == k)
+      tmp <- ranger::ranger(original_label ~ ., data = core_df[train_idx, ], num.trees = 100)
+      preds <- stats::predict(tmp, core_df[test_idx, ])$predictions
+      match_counts[test_idx] <- match_counts[test_idx] + as.numeric(preds == core_df$original_label[test_idx])
+    }
+  }
+
+  agreement_rate <- match_counts / repeats
+  valid_names <- names(agreement_rate)[agreement_rate >= agreement_thresh]
+  cleaned_df <- core_df[valid_names, ]
+
+  # --- STAGE 2: EVALUATION LOOP (On Cleaned Data Only) ---
+  message("Stage 2: Evaluating final model performance on cleaned cells...")
+  eval_preds <- factor(rep(NA_character_, nrow(cleaned_df)), levels = levels(cleaned_df$original_label))
+  eval_fold_assign <- integer(nrow(cleaned_df))
+  for (cls in levels(cleaned_df$original_label)) {
+    cls_idx <- which(cleaned_df$original_label == cls)
+    eval_fold_assign[cls_idx] <- sample(rep(seq_len(cv_folds), length.out = length(cls_idx)))
+  }
+
+  overall_list <- list()
+  class_metric_list <- list()
 
   for (k in seq_len(cv_folds)) {
-    train_k <- labelled_df[fold_assign != k, , drop = FALSE]
-    test_k  <- labelled_df[fold_assign == k, , drop = FALSE]
+    train_idx <- which(eval_fold_assign != k); test_idx <- which(eval_fold_assign == k)
+    eval_mod <- ranger::ranger(original_label ~ ., data = cleaned_df[train_idx, ], num.trees = num.trees)
+    pk <- stats::predict(eval_mod, cleaned_df[test_idx, ])$predictions
+    pk <- factor(pk, levels = levels(cleaned_df$original_label))
+    tk <- cleaned_df$original_label[test_idx]
 
-    if (nrow(train_k) < 2 || nrow(test_k) < 1) next
+    eval_preds[test_idx] <- pk
 
-    train_k$cell_id <- NULL
-    test_k$cell_id <- NULL
+    # Calculate Overall Fold Metrics
+    f1_vec <- f1_macro(tk, pk)
+    overall_list[[k]] <- data.frame(fold = k, accuracy = mean(pk == tk), f1_macro = mean(f1_vec))
 
-    model_k <- ranger::ranger(
-      formula,
-      data = train_k,
-      num.trees = num.trees,
-      mtry = mtry_val,
-      num.threads = max(1, parallel::detectCores(logical = FALSE))
-    )
-
-    pred_k <- stats::predict(model_k, test_k)$predictions
-    pred_k <- factor(pred_k, levels = levels(all_truth))
-    truth_k <- test_k[[label_col]]
-
-    all_pred[fold_assign == k] <- pred_k
-
-    overall_list[[k]] <- data.frame(
+    # Calculate Per-Class Metrics for this fold
+    classes <- levels(cleaned_df$original_label)
+    class_metric_list[[k]] <- data.frame(
+      class = classes,
       fold = k,
-      accuracy = mean(pred_k == truth_k),
-      f1_macro = f1_macro(truth_k, pred_k)
+      precision = sapply(classes, function(c) {
+        tp <- sum(tk==c & pk==c); fp <- sum(tk!=c & pk==c)
+        if(tp+fp==0) 0 else tp/(tp+fp)
+      }),
+      recall = sapply(classes, function(c) {
+        tp <- sum(tk==c & pk==c); fn <- sum(tk==c & pk!=c)
+        if(tp+fn==0) 0 else tp/(tp+fn)
+      }),
+      f1 = f1_vec
     )
-
-    classes <- union(levels(truth_k), levels(pred_k))
-    class_list[[k]] <- data.frame(
-      class = factor(classes, levels = classes),
-      tp = sapply(classes, function(cls) sum(truth_k == cls & pred_k == cls)),
-      fp = sapply(classes, function(cls) sum(truth_k != cls & pred_k == cls)),
-      fn = sapply(classes, function(cls) sum(truth_k == cls & pred_k != cls)),
-      support = sapply(classes, function(cls) sum(truth_k == cls)),
-      fold = k
-    ) |>
-      dplyr::mutate(
-        precision = ifelse(.data$tp + .data$fp == 0, 0, .data$tp / (.data$tp + .data$fp)),
-        recall    = ifelse(.data$tp + .data$fn == 0, 0, .data$tp / (.data$tp + .data$fn)),
-        f1        = ifelse(.data$precision + .data$recall == 0, 0,
-                           2 * .data$precision * .data$recall / (.data$precision + .data$recall))
-      )
   }
 
-  overall_list <- Filter(Negate(is.null), overall_list)
-  class_list <- Filter(Negate(is.null), class_list)
-  cv_overall <- if (length(overall_list)) dplyr::bind_rows(overall_list) else NULL
-  cv_class_metrics <- if (length(class_list)) dplyr::bind_rows(class_list) else NULL
+  # --- FINAL MODEL TRAINING ---
+  mtry_val <- if (is.null(mtry)) floor(sqrt(length(features_use))) else mtry
+  final_model <- ranger::ranger(original_label ~ ., data = cleaned_df,
+                                num.trees = num.trees, mtry = mtry_val,
+                                probability = TRUE)
 
-  # Aggregate CV predictions for summary metrics
-  confusion_cv <- table(truth = all_truth, pred = all_pred)
-  acc_cv <- mean(all_truth == all_pred, na.rm = TRUE)
-  f1_cv <- if (any(is.na(all_pred))) NA_real_ else f1_macro(all_truth, all_pred)
+  # Update SPE colData
+  new_labels <- lab_vec
+  new_labels[colnames(spe) %in% names(agreement_rate[agreement_rate < agreement_thresh])] <- unknown_label
+  SummarizedExperiment::colData(spe)$cleaned_core_label <- new_labels
 
-  metrics <- list(
-    confusion_matrix = confusion_cv,
-    accuracy = acc_cv,
-    f1_macro = f1_cv,
-    cv_overall = cv_overall
-  )
-
-  # Train final model on all labelled data
-  train_all <- labelled_df
-  train_all$cell_id <- NULL
-  final_model <- ranger::ranger(
-    formula,
-    data = train_all,
-    num.trees = num.trees,
-    mtry = mtry_val,
-    num.threads = max(1, parallel::detectCores(logical = FALSE))
-  )
-
-  list(
+  # --- RETURN LIST (Matches your old output structure) ---
+  return(list(
+    spe = spe,
     model = final_model,
-    metrics = metrics,
-    test_pred = all_pred,
-    test_truth = all_truth,
-    cv_overall = cv_overall,
-    cv_class_metrics = cv_class_metrics,
-    features_used = present   # NEW: return what was actually used
-  )
+    agreement_rates = agreement_rate,
+    features_used = features_use,
+    metrics = list(
+      confusion_matrix = table(truth = cleaned_df$original_label, pred = eval_preds),
+      accuracy = mean(cleaned_df$original_label == eval_preds),
+      f1_macro = mean(f1_macro(cleaned_df$original_label, eval_preds)),
+      cv_overall = dplyr::bind_rows(overall_list),
+      cv_class_metrics = dplyr::bind_rows(class_metric_list)
+    ),
+    test_pred = eval_preds,
+    test_truth = cleaned_df$original_label
+  ))
 }
+
+
+
 
 
 #' Derive per-class metrics from a fitted model
@@ -509,43 +756,97 @@ label_agreement_rates <- function(spe,
 #'
 #' @return The input `spe` with updated `colData` columns.
 #' @export
-predict_unknown_with_rf <- function(spe,
-                                    model,
-                                    assay_name = "norm",
-                                    label_col = "custom_label",
-                                    out_col = "soft_tree_label_filled",
-                                    pred_col = "rf_pred",
-                                    unknown_label = "Unknown") {
-  .assert_spe(spe)
+# predict_unknown_with_rf <- function(spe,
+#                                     model,
+#                                     assay_name = "norm",
+#                                     label_col = "custom_label",
+#                                     out_col = "soft_tree_label_filled",
+#                                     pred_col = "rf_pred",
+#                                     unknown_label = "Unknown") {
+#   .assert_spe(spe)
+#   if (!inherits(model, "ranger")) stop("model must be a ranger object.")
+#   if (!label_col %in% colnames(SummarizedExperiment::colData(spe))) {
+#     stop("label_col not found in colData(spe).")
+#   }
+#   if (!assay_name %in% SummarizedExperiment::assayNames(spe)) {
+#     stop(paste0("Assay '", assay_name, "' not found in spe."))
+#   }
+#
+#   feat_mat <- SummarizedExperiment::assay(spe, assay_name)
+#   feature_df <- as.data.frame(t(feat_mat))
+#
+#   # Align feature columns with the model's expected variables
+#   expected <- model$forest$independent.variable.names
+#   missing_cols <- setdiff(expected, names(feature_df))
+#   if (length(missing_cols) > 0) {
+#     stop("Missing feature columns required by model: ", paste(missing_cols, collapse = ", "))
+#   }
+#   feature_df <- feature_df[, expected, drop = FALSE]
+#
+#   preds <- stats::predict(model, feature_df)$predictions
+#
+#   labels <- SummarizedExperiment::colData(spe)[[label_col]]
+#   filled <- labels
+#   replace_idx <- is.na(labels) | labels == unknown_label
+#   filled[replace_idx] <- as.character(preds)[replace_idx]
+#
+#   SummarizedExperiment::colData(spe)[[pred_col]] <- preds
+#   SummarizedExperiment::colData(spe)[[out_col]] <- filled
+#   spe
+# }
+predict_unknown_with_randomforest <- function(spe,
+                                              model,
+                                              assay_name = "norm",
+                                              label_col = "custom_label",
+                                              out_col = "soft_tree_label_filled",
+                                              pred_col = "rf_pred",
+                                              unknown_label = "Unknown",
+                                              threshold = 0.5,           # New: Confidence threshold
+                                              unassigned_label = "Unassigned") { # New: Label for low confidence
+  cytoGateR:::.assert_spe(spe)
   if (!inherits(model, "ranger")) stop("model must be a ranger object.")
-  if (!label_col %in% colnames(SummarizedExperiment::colData(spe))) {
-    stop("label_col not found in colData(spe).")
-  }
-  if (!assay_name %in% SummarizedExperiment::assayNames(spe)) {
-    stop(paste0("Assay '", assay_name, "' not found in spe."))
+
+  # Ranger must be trained with probability = TRUE for thresholding to work
+  if (model$treetype != "Probability estimation") {
+    warning("Model was not trained with probability = TRUE. Thresholding will be ignored.")
+    threshold <- 0
   }
 
   feat_mat <- SummarizedExperiment::assay(spe, assay_name)
   feature_df <- as.data.frame(t(feat_mat))
 
-  # Align feature columns with the model's expected variables
+  # Align features
   expected <- model$forest$independent.variable.names
-  missing_cols <- setdiff(expected, names(feature_df))
-  if (length(missing_cols) > 0) {
-    stop("Missing feature columns required by model: ", paste(missing_cols, collapse = ", "))
-  }
   feature_df <- feature_df[, expected, drop = FALSE]
 
-  preds <- stats::predict(model, feature_df)$predictions
+  # 1. Get Probabilities
+  pred_obj <- stats::predict(model, feature_df)
+  prob_mat <- pred_obj$predictions # This is a matrix of probabilities per class
 
+  # 2. Determine winners and their confidence level
+  max_probs <- apply(prob_mat, 1, max)
+  winning_indices <- apply(prob_mat, 1, which.max)
+  raw_preds <- colnames(prob_mat)[winning_indices]
+
+  # 3. Apply Thresholding
+  # If confidence < threshold, label as 'Unassigned'
+  final_preds <- ifelse(max_probs >= threshold, raw_preds, unassigned_label)
+
+  # 4. Fill into SPE
   labels <- SummarizedExperiment::colData(spe)[[label_col]]
   filled <- labels
-  replace_idx <- is.na(labels) | labels == unknown_label
-  filled[replace_idx] <- as.character(preds)[replace_idx]
 
-  SummarizedExperiment::colData(spe)[[pred_col]] <- preds
+  # We only fill cells that were originally 'Unknown' or NA
+  replace_idx <- is.na(labels) | labels == unknown_label
+  filled[replace_idx] <- final_preds[replace_idx]
+
+  SummarizedExperiment::colData(spe)[[pred_col]] <- final_preds
   SummarizedExperiment::colData(spe)[[out_col]] <- filled
-  spe
+
+  # Optional: store the max probability for QC
+  SummarizedExperiment::colData(spe)$rf_confidence <- max_probs
+
+  return(spe)
 }
 
 
