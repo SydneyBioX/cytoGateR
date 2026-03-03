@@ -60,44 +60,66 @@ run_soft_gating <- function(spe, lineage_table,
 
 #' Run tree-based soft gating on a SpatialExperiment
 #'
-#' Fit marker-based gating trees for multiple cell types and compute per-cell
-#' membership probabilities and hard labels using a hierarchical, soft
-#' decision-tree model.
+#' Build a marker-based, hierarchical soft-gating model for each lineage in a
+#' marker table, compute per-cell membership probabilities, and derive hard
+#' lineage/state labels.
 #'
-#' @param spe A `SpatialExperiment` or `SingleCellExperiment` containing per-cell
-#'   marker expression.
-#' @param lineage_table A tibble/data.frame with columns `cell_type`,
-#'   `pos_markers`, and `neg_markers`. Marker columns must be list-columns of
-#'   character vectors specifying positive and negative markers for each cell
-#'   type.
-#' @param assay_name Name of the assay in `spe` to use as the expression matrix
-#'   (e.g. `"norm"`).
-#' @param max_depth Maximum recursion depth of each gating tree.
-#' @param min_cells Minimum number of cells required to allow a node split.
-#' @param min_score Minimum separability score required to accept a split.
-#' @param uncert_thresh Cells whose best lineage probability is below this
-#'   threshold are labeled `"Uncertain"`.
-#' @param cutoff_method Cutoff selection method passed to [fit_gmm_2()].
+#' For each \code{cell_type} in \code{lineage_table}, a gating tree is fit from
+#' positive and (optionally) negative marker sets. Per-cell probabilities are
+#' then computed by evaluating each fitted tree via \code{tree_prob()}, with an
+#' optional negative-marker penalty controlled by \code{neg_strength}.
+#'
+#' Hard labels are assigned as the lineage with the highest probability (excluding
+#' \code{"Proliferating"}), unless the best probability is below
+#' \code{uncert_thresh}, in which case the cell is labeled \code{"Uncertain"}.
+#' If a \code{"Proliferating"} lineage is present, cells with proliferating
+#' probability \eqn{\ge 0.5} and not \code{"Uncertain"} receive a \code{"Prolif "}
+#' prefix in \code{cell_type_state}.
+#'
+#' @param spe A \code{SpatialExperiment} or \code{SingleCellExperiment} containing
+#'   per-cell marker expression.
+#' @param lineage_table A \code{data.frame}/tibble with at least the columns
+#'   \code{cell_type}, \code{pos_markers}, and \code{neg_markers}. Marker columns
+#'   must be list-columns of character vectors. Markers not present in
+#'   \code{spe} are dropped during cleaning.
+#' @param assay_name Character scalar naming the assay in \code{spe} used as the
+#'   expression matrix (default \code{"norm"}).
+#' @param max_depth Integer; maximum recursion depth of each gating tree.
+#' @param min_cells Integer; minimum number of cells required to allow a node split.
+#' @param min_score Numeric; minimum separability score required to accept a split.
+#' @param uncert_thresh Numeric in [0,1]; cells whose best (non-proliferating)
+#'   lineage probability is below this threshold are labeled \code{"Uncertain"}.
+#' @param neg_strength Numeric in [0,1]; strength of the negative-marker penalty
+#'   applied within \code{tree_prob()} (default \code{0.4}). Larger values increase
+#'   the penalty from negative-marker expression.
+#' @param cutoff_method Cutoff selection method passed to \code{fit_gmm_2()}.
+#'   One of \code{"mean"} or \code{"equal_posteriors"}.
 #' @param gmm_model_names Optional character vector of model names to pass to
-#'   [mclust::Mclust()] (e.g., "V" to forbid equal-variance in 1D, "E" for equal-variance always and NULL (default) for selection by BIC).
-#' @param parallel Logical; if `TRUE`, build per-cell-type trees in parallel
-#'   using `furrr::future_map()`.
+#'   \code{mclust::Mclust()} for 1D GMM fitting (e.g., \code{"V"}, \code{"E"}).
+#'   Use \code{NULL} (default) to allow selection by BIC.
+#' @param parallel Logical; if \code{TRUE}, build per-cell-type trees in parallel
+#'   using \code{furrr::future_map()}.
 #' @param workers Optional integer number of workers for parallel execution.
-#'   Defaults to `parallel::detectCores() - 1` when `parallel = TRUE`.
+#'   Defaults to \code{max(1, parallel::detectCores() - 1)} when \code{parallel = TRUE}.
 #'
 #' @return A named list with components:
 #' \describe{
-#'   \item{spe}{The input `spe` object with additional columns added to `colData`
-#'     (`P_*` probabilities, `cell_type_hard`, `cell_type_state`, `prob_best`,
-#'     `prob_prolif`).}
-#'   \item{trees}{A named list of fitted gating trees, one per cell type.}
+#'   \item{spe}{The input \code{spe} with added \code{colData} columns:
+#'     \code{P_*} (per-lineage probabilities), \code{cell_type_hard},
+#'     \code{cell_type_state}, \code{prob_best}, and \code{prob_prolif}.}
+#'   \item{trees}{A named list of fitted gating trees, one per \code{cell_type}.}
 #'   \item{prob_mat}{Numeric matrix of per-cell probabilities
-#'     (cells × cell types).}
-#'   \item{hard_label}{Character vector of hard lineage labels after applying the
-#'     uncertainty threshold.}
-#'   \item{lineage_table}{The cleaned marker table actually used to build the
-#'     trees (after intersecting with available markers in `spe`).}
+#'     (cells \eqn{\times} cell types).}
+#'   \item{hard_label}{Character vector of hard lineage labels after applying
+#'     \code{uncert_thresh}.}
+#'   \item{lineage_table}{The cleaned marker table actually used to build the trees.}
 #' }
+#'
+#' @details
+#' Marker statistics used for logistic scoring/penalization are precomputed once
+#' across all markers appearing in \code{lineage_table} via \code{fit_marker_stats()}.
+#' Trees are built with \code{build_fullcoverage_tree()} and evaluated with
+#' \code{tree_prob()}.
 #'
 #' @export
 run_tree_gating <- function(spe,

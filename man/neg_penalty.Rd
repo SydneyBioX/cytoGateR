@@ -13,18 +13,41 @@ neg_penalty(
 )
 }
 \arguments{
-\item{expr_mat}{Numeric matrix-like expression object with markers in rows and
-cells in columns.}
+\item{expr_mat}{A numeric matrix-like object containing expression values,
+with markers in rows and cells in columns.}
 
-\item{neg_markers}{Character vector of marker names to penalize.}
+\item{neg_markers}{A character vector of marker names to penalize.}
 
-\item{cell_i}{Integer index of the cell/column to evaluate.}
+\item{cell_i}{An integer index specifying the column (cell) to evaluate.}
+
+\item{marker_stats}{A named list containing per-marker statistics. Each
+element must include at least:
+\describe{
+  \item{cutoff}{Numeric value representing the logistic midpoint.}
+  \item{scale}{Numeric value controlling the logistic slope.}
+}}
+
+\item{neg_strength}{A numeric scalar in [0, 1] controlling the strength of
+the penalty. Larger values increase the impact of negative-marker expression.}
 }
 \value{
-A numeric scalar in [0,1] representing the penalty factor.
+A numeric scalar in the range [0, 1] representing the multiplicative
+  penalty factor for the specified cell.
 }
 \description{
-Compute a multiplicative penalty in [0,1] based on the mean expression of
-negative markers for a given cell. Higher negative-marker expression leads
-to stronger penalty (smaller value).
+Compute a multiplicative penalty factor in the range [0, 1] for a given cell
+based on the expression of predefined negative markers.
+}
+\details{
+For each negative marker, a logistic scoring function is used to estimate
+the probability (`p_bad`) that the marker is expressed above its expected
+background level. The final penalty is computed as the product of
+(1 - p_bad * neg_strength) across all negative markers.
+
+Higher negative-marker expression results in a stronger penalty (i.e.,
+a smaller multiplicative factor).
+
+
+If no valid negative markers are found in \code{marker_stats}, the function
+returns 1 (no penalty).
 }

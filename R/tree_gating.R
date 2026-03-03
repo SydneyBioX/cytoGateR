@@ -258,17 +258,37 @@ collect_path_scores <- function(tree, expr_mat, cell_i) {
 
 #' Negative marker penalty
 #'
-#' Compute a multiplicative penalty in [0,1] based on the mean expression of
-#' negative markers for a given cell. Higher negative-marker expression leads
-#' to stronger penalty (smaller value).
+#' Compute a multiplicative penalty factor in the range [0, 1] for a given cell
+#' based on the expression of predefined negative markers.
 #'
+#' For each negative marker, a logistic scoring function is used to estimate
+#' the probability (`p_bad`) that the marker is expressed above its expected
+#' background level. The final penalty is computed as the product of
+#' (1 - p_bad * neg_strength) across all negative markers.
 #'
-#' @param expr_mat Numeric matrix-like expression object with markers in rows and
-#'   cells in columns.
-#' @param neg_markers Character vector of marker names to penalize.
-#' @param cell_i Integer index of the cell/column to evaluate.
+#' Higher negative-marker expression results in a stronger penalty (i.e.,
+#' a smaller multiplicative factor).
 #'
-#' @return A numeric scalar in [0,1] representing the penalty factor.
+#' @param expr_mat A numeric matrix-like object containing expression values,
+#'   with markers in rows and cells in columns.
+#' @param neg_markers A character vector of marker names to penalize.
+#' @param cell_i An integer index specifying the column (cell) to evaluate.
+#' @param marker_stats A named list containing per-marker statistics. Each
+#'   element must include at least:
+#'   \describe{
+#'     \item{cutoff}{Numeric value representing the logistic midpoint.}
+#'     \item{scale}{Numeric value controlling the logistic slope.}
+#'   }
+#' @param neg_strength A numeric scalar in [0, 1] controlling the strength of
+#'   the penalty. Larger values increase the impact of negative-marker expression.
+#'
+#' @return A numeric scalar in the range [0, 1] representing the multiplicative
+#'   penalty factor for the specified cell.
+#'
+#' @details
+#' If no valid negative markers are found in \code{marker_stats}, the function
+#' returns 1 (no penalty).
+#'
 #' @export
 
 

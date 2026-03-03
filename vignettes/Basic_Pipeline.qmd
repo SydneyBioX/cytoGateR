@@ -159,11 +159,12 @@ lineage_table_public <- tribble(
 res_pub <- cytoGateR::run_tree_gating(
   spe,
   lineage_table_public,
-  assay_name = "norm",
-  max_depth = 4,
+  assay_name = "exprs",
+  max_depth = 11,
   min_cells = 200,
   min_score = 0.5,
-  uncert_thresh = 0.25
+  uncert_thresh = 0.25,
+  neg_strength = 0.5
 )
 # res_pub <- cytoGateR::run_soft_gating(spe1, lineage_table_public) # for soft gating all downstream analysis should still run
 ```
@@ -189,7 +190,7 @@ So we have a core group of cell identified at the top 2% which we will now train
 ## Train Random Forest
 
 ```{r train-rf}
-rf_pub <- train_custom_rf(res_pub$spe,
+rf_pub <- train_custom_randomforest(res_pub$spe,
                           label_col = "cutoff_label")
 ```
 
@@ -213,17 +214,17 @@ plot_class_metrics(class_metrics_pub, title = "Public lineage: per-class metrics
 ## Apply Random Forest to the "Unknown" outside the core group of cells
 
 ```{r apply-rf}
-res_pub$spe <- predict_unknown_with_rf(res_pub$spe,
+rf_pub$spe <- predict_unknown_with_randomforest(rf_pub$spe,
                                        rf_pub$model,
-                                       label_col = "cutoff_label",
+                                       label_col = "cleaned_core_label",
                                        out_col = "cutoff_label_filled")
 
 ggpubr::ggarrange(
   plotlist = list(
-    plot_label_counts(spe = res_pub$spe,
-                  label_col = "cutoff_label",
+    plot_label_counts(spe = rf_pub$spe,
+                  label_col = "cleaned_core_label",
                   title = "Before RF applied"),
-    plot_label_counts(spe = res_pub$spe,
+    plot_label_counts(spe = rf_pub$spe,
                   label_col = "cutoff_label_filled",
                   title = "After RF applied")
     
@@ -237,16 +238,16 @@ ggpubr::ggarrange(
 ## Clean public ground truth labels
 
 ```{r}
-colData(res_pub$spe)$cell_type_pub <- forcats::fct_recode(colData(res_pub$spe)$cell_type, Unknown = "undefined")
-colData(res_pub$spe)$cell_labels_pub <- forcats::fct_recode(colData(res_pub$spe)$cell_labels, NULL = "unlabeled")
+colData(rf_pub$spe)$cell_type_pub <- forcats::fct_recode(colData(rf_pub$spe)$cell_type, Unknown = "undefined")
+colData(rf_pub$spe)$cell_labels_pub <- forcats::fct_recode(colData(rf_pub$spe)$cell_labels, NULL = "unlabeled")
 
 # drop unknowns from cell_type
-spe_pub_type <- res_pub$spe[,colData(res_pub$spe)$cell_type_pub != "Unknown"]
+spe_pub_type <- rf_pub$spe[,colData(rf_pub$spe)$cell_type_pub != "Unknown"]
 # colData(spe_pub_type)$cell_type_pub |> table()
 
 
 # drop unlabelled from cell_labels
-spe_pub_labels <- res_pub$spe[,!is.na(colData(res_pub$spe)$cell_labels_pub)]
+spe_pub_labels <- rf_pub$spe[,!is.na(colData(rf_pub$spe)$cell_labels_pub)]
 
 ```
 
@@ -272,24 +273,41 @@ ggpubr::ggarrange(plotlist = list(a,b))
 ## Spatial Evaluation
 
 ```{r}
+all_labels <- unique(c(
+  as.character(spe_pub_type$cutoff_label_filled),
+  as.character(spe_pub_type$cell_type_pub)
+))
+
+my_colors <- as.vector(pals::polychrome(length(all_labels)))
+names(my_colors) <- all_labels
+
+
 ggpubr::ggarrange(
   plotlist = list(
     plot_labelled_cells(
       spe_pub_type,
       col_label = "cutoff_label_filled",
       image_index = 1:4,
-      image_col = "image_name"
-    ) + theme(title = element_blank(), plot.subtitle = element_blank()),
+      image_col = "image_name",
+      point_size = 0.3,
+      label_levels = all_labels,  # Forces the legend order to match
+      label_colors = my_colors    # Forces the colors to match
+    )+ theme(title = element_blank(), plot.subtitle = element_blank()),
     plot_labelled_cells(
       spe_pub_type,
       col_label = "cell_type_pub",
       image_index = 1:4,
-      image_col = "image_name"
-    ) + theme(title = element_blank(), plot.subtitle = element_blank())
+      image_col = "image_name",
+      point_size = 0.3,
+      label_levels = all_labels,
+      label_colors = my_colors
+    )
+    + theme(title = element_blank(), plot.subtitle = element_blank())
   ),
   common.legend = TRUE,
   labels = c("cytoGateR", "Ground Truth classifier"),
   legend = "bottom",
   label.y = 1.02
 )
+
 ```

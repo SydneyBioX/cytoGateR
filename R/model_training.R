@@ -135,27 +135,71 @@ custom_labels <- function(spe,
 }
 
 
-#' Train a random forest on labelled cells
+#' Train a custom random forest with consensus label cleaning
 #'
-#' Trains a `ranger` random forest using assay features and an existing label
-#' column in `colData`. Cells with missing or `unknown_label` are excluded from
-#' training and evaluation.
+#' Train a \code{ranger} random forest classifier on labelled cells from a
+#' \code{SpatialExperiment} or \code{SingleCellExperiment}. The workflow has two
+#' stages:
+#' \enumerate{
+#'   \item \strong{Consensus cleaning:} repeated stratified cross-validation is
+#'   used to estimate how consistently each labelled cell is predicted as its
+#'   original label. Cells with agreement below \code{agreement_thresh} are
+#'   flagged as unreliable and relabeled as \code{unknown_label} in
+#'   \code{colData(spe)$cleaned_core_label}.
+#'   \item \strong{Model evaluation and final training:} cross-validation is run
+#'   on the cleaned labelled set to report accuracy and macro-F1, and a final
+#'   probability random forest model is trained on all cleaned labelled cells.
+#' }
 #'
-#' @param spe A `SpatialExperiment` or `SingleCellExperiment`.
-#' @param label_col Name of the label column in `colData` (default "custom_label").
-#' @param assay_name Assay to use as features (default "norm").
-#' @param unknown_label Label value to treat as unlabeled (default "Unknown").
-#' @param train_frac Fraction of labelled cells used for training (currently
-#'   ignored; cross-validation uses all labelled cells).
-#' @param num.trees Number of trees for `ranger` (default 200).
-#' @param mtry Optional `mtry`; if `NULL`, uses floor(sqrt(p)).
-#' @param seed Optional seed for reproducibility.
-#' @param cv_folds Number of folds for cross-validation; if >1, CV metrics are
-#'   computed in addition to the hold-out split (default 5).
+#' @param spe A \code{SpatialExperiment} or \code{SingleCellExperiment}.
+#' @param label_col Character scalar naming the label column in
+#'   \code{colData(spe)} (default \code{"cutoff_label"}).
+#' @param assay_name Character scalar naming the assay used as features
+#'   (default \code{"norm"}).
+#' @param unknown_label Character label treated as unlabeled and excluded from
+#'   training/cleaning (default \code{"Unknown"}).
+#' @param num.trees Integer number of trees for the final \code{ranger} model
+#'   (default \code{200}).
+#' @param mtry Optional integer \code{mtry} for \code{ranger}. If \code{NULL},
+#'   uses \code{floor(sqrt(p))} where \code{p} is the number of features used.
+#' @param seed Optional integer seed for reproducibility.
+#' @param features Character vector of feature (marker) names to use, or
+#'   \code{"all"} to use all assay rows (default \code{"all"}).
+#' @param cv_folds Integer number of folds used for stratified cross-validation
+#'   (default \code{5}).
+#' @param repeats Integer number of repeated CV rounds used during consensus
+#'   cleaning (default \code{10}).
+#' @param agreement_thresh Numeric in [0,1] specifying the minimum agreement rate
+#'   required to keep an originally labelled cell during cleaning (default
+#'   \code{0.8}).
 #'
-#' @return List with `model`, `metrics` (CV confusion_matrix, accuracy,
-#'   f1_macro, cv_overall), `test_pred`/`test_truth` (pooled CV predictions and
-#'   truths), and `cv_overall`/`cv_class_metrics` per fold.
+#' @return A named list with components:
+#' \describe{
+#'   \item{spe}{The input \code{spe} with an added \code{colData} column
+#'     \code{cleaned_core_label}, where low-agreement labelled cells are set to
+#'     \code{unknown_label}.}
+#'   \item{model}{A fitted \code{ranger} model trained on the cleaned labelled
+#'     cells with \code{probability = TRUE}.}
+#'   \item{agreement_rates}{Named numeric vector of per-cell agreement rates from
+#'     the consensus cleaning stage (indexed by training-row names).}
+#'   \item{features_used}{Character vector of feature names used for training.}
+#'   \item{metrics}{List of evaluation outputs on the cleaned labelled set:
+#'     \describe{
+#'       \item{confusion_matrix}{Confusion matrix for pooled CV predictions.}
+#'       \item{accuracy}{Overall pooled CV accuracy.}
+#'       \item{f1_macro}{Overall pooled macro-F1.}
+#'       \item{cv_overall}{Per-fold data.frame with accuracy and macro-F1.}
+#'       \item{cv_class_metrics}{Per-fold, per-class precision/recall/F1 table.}
+#'     }}
+#'   \item{test_pred}{Factor of pooled cross-validated predictions on cleaned labelled cells.}
+#'   \item{test_truth}{Factor of pooled cross-validated true labels on cleaned labelled cells.}
+#' }
+#'
+#' @details
+#' During consensus cleaning, models are trained without probability estimation.
+#' The final model is trained with \code{probability = TRUE} to support downstream
+#' thresholding workflows.
+#'
 #' @export
 # train_custom_rf <- function(spe,
 #                             label_col = "custom_label",
@@ -360,7 +404,7 @@ custom_labels <- function(spe,
 #                                       repeats = 10,
 #                                       agreement_thresh = 0.8) {
 #
-#   cytoGateR:::.assert_spe(spe)
+#   .assert_spe(spe)
 #
 #   # 1. Feature Selection Logic
 #   feat_mat_all <- SummarizedExperiment::assay(spe, assay_name)
@@ -472,7 +516,7 @@ train_custom_randomforest <- function(spe,
                                       agreement_thresh = 0.8) {
 
   if (!is.null(seed)) set.seed(seed)
-  cytoGateR:::.assert_spe(spe)
+  .assert_spe(spe)
 
   # 1. Feature Prep
   feat_mat_all <- SummarizedExperiment::assay(spe, assay_name)
@@ -741,20 +785,51 @@ label_agreement_rates <- function(spe,
 
 
 
-#' Predict and fill unknown labels with a trained model
+#' Predict and fill unknown labels using a trained random forest model
 #'
-#' Uses a trained `ranger` model to predict labels for all cells and fills
-#' missing or `unknown_label` entries in `colData`.
+#' Use a trained \code{ranger} classification model to predict cell-type labels
+#' for all cells in a \code{SpatialExperiment} or \code{SingleCellExperiment}
+#' object. Predicted labels are used to fill entries in \code{label_col} that
+#' are either \code{NA} or equal to \code{unknown_label}.
 #'
-#' @param spe A `SpatialExperiment` or `SingleCellExperiment`.
-#' @param model A fitted `ranger` model returned by [train_custom_rf()].
-#' @param assay_name Assay to use as features (default "norm").
-#' @param label_col Name of the existing label column (default "custom_label").
-#' @param out_col Name of the output column with filled labels (default "soft_tree_label_filled").
-#' @param pred_col Optional column to store raw model predictions (default "rf_pred").
-#' @param unknown_label Label value to treat as missing (default "Unknown").
+#' If the model was trained with \code{probability = TRUE}, class probabilities
+#' are used to compute a confidence score for each prediction. Predictions with
+#' maximum class probability below \code{threshold} are reassigned to
+#' \code{unassigned_label}. The maximum probability is stored for quality control.
 #'
-#' @return The input `spe` with updated `colData` columns.
+#' @param spe A \code{SpatialExperiment} or \code{SingleCellExperiment} object.
+#' @param model A fitted \code{ranger} model returned by \code{train_custom_rf()}.
+#'   The model should be trained with \code{probability = TRUE} to enable
+#'   threshold-based filtering.
+#' @param assay_name Character scalar specifying which assay to use as feature
+#'   input (default \code{"norm"}).
+#' @param label_col Character scalar naming the existing label column in
+#'   \code{colData(spe)} (default \code{"custom_label"}).
+#' @param out_col Character scalar naming the output column that will contain
+#'   the filled labels (default \code{"soft_tree_label_filled"}).
+#' @param pred_col Character scalar naming the column used to store raw model
+#'   predictions (default \code{"rf_pred"}).
+#' @param unknown_label Character value treated as missing and eligible for
+#'   replacement (default \code{"Unknown"}).
+#' @param threshold Numeric value in [0,1] specifying the minimum required
+#'   class probability for a prediction to be accepted (default \code{0.5}).
+#'   Ignored if the model was not trained with \code{probability = TRUE}.
+#' @param unassigned_label Character label assigned to cells whose maximum
+#'   class probability is below \code{threshold} (default \code{"Unassigned"}).
+#'
+#' @return The input \code{spe} object with updated \code{colData} columns:
+#'   \describe{
+#'     \item{\code{pred_col}}{Raw predicted labels from the random forest.}
+#'     \item{\code{out_col}}{Filled labels, replacing only \code{NA} or
+#'       \code{unknown_label} entries in \code{label_col}.}
+#'     \item{\code{rf_confidence}}{Maximum predicted class probability per cell.}
+#'   }
+#'
+#' @details
+#' Feature columns are automatically aligned to match the variables used during
+#' model training. Only cells originally labeled as \code{NA} or
+#' \code{unknown_label} are replaced in the output column.
+#'
 #' @export
 # predict_unknown_with_rf <- function(spe,
 #                                     model,
@@ -803,7 +878,7 @@ predict_unknown_with_randomforest <- function(spe,
                                               unknown_label = "Unknown",
                                               threshold = 0.5,           # New: Confidence threshold
                                               unassigned_label = "Unassigned") { # New: Label for low confidence
-  cytoGateR:::.assert_spe(spe)
+  .assert_spe(spe)
   if (!inherits(model, "ranger")) stop("model must be a ranger object.")
 
   # Ranger must be trained with probability = TRUE for thresholding to work
