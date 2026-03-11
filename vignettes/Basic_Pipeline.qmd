@@ -270,7 +270,7 @@ b <- plot_label_confusion_matrix(spe_pub_labels,
 ggpubr::ggarrange(plotlist = list(a,b))
 ```
 
-## Spatial Evaluation
+## Spatial Evaluation 1st round
 
 ```{r}
 all_labels <- unique(c(
@@ -311,3 +311,132 @@ ggpubr::ggarrange(
 )
 
 ```
+
+
+
+
+## Train Random Forest 2nd round
+
+```{r train-rf2}
+
+rf_pub$spe$clusters_r1 <- as.character(rf_pub$spe$cutoff_label_filled)
+rf_pub$spe$clusters_r1[rf_pub$spe$clusters_r1 == "Unassigned"] <- "Unknown"
+
+rf_pub_2nd <- train_custom_randomforest(rf_pub$spe,
+                                        label_col = "clusters_r1")
+```
+
+
+## Apply Random Forest to the "Unknown" outside the core group of cells 2nd round
+
+```{r apply-rf2}
+rf_pub_2nd$spe <- predict_unknown_with_randomforest(rf_pub_2nd$spe,
+                                                    rf_pub_2nd$model,
+                                                    label_col = "cleaned_core_label",
+                                                    out_col = "cell_labels_2nd")
+
+ggpubr::ggarrange(
+  plotlist = list(
+    plot_label_counts(spe = rf_pub_2nd$spe,
+                  label_col = "cleaned_core_label",
+                  title = "Before RF applied"),
+    plot_label_counts(spe = rf_pub_2nd$spe,
+                  label_col = "cell_labels_2nd",
+                  title = "After RF applied")
+    
+  ),
+  ncol =1
+)
+```
+
+
+
+## Train Random Forest 3rd round
+
+```{r train-rf3}
+
+rf_pub_2nd$spe$clusters_r2 <- as.character(rf_pub_2nd$spe$cell_labels_2nd)
+rf_pub_2nd$spe$clusters_r2[rf_pub_2nd$spe$clusters_r2 == "Unassigned"] <- "Unknown"
+
+rf_pub_3rd <- train_custom_randomforest(rf_pub_2nd$spe,
+                                        label_col = "clusters_r2")
+```
+
+
+## Apply Random Forest to the "Unknown" outside the core group of cells 2nd round
+
+```{r apply-rf3}
+rf_pub_3rd$spe <- predict_unknown_with_randomforest(rf_pub_3rd$spe,
+                                                    rf_pub_3rd$model,
+                                                    label_col = "cleaned_core_label",
+                                                    out_col = "cell_labels_3rd")
+
+ggpubr::ggarrange(
+  plotlist = list(
+    plot_label_counts(spe = rf_pub_3rd$spe,
+                  label_col = "cleaned_core_label",
+                  title = "Before RF applied"),
+    plot_label_counts(spe = rf_pub_3rd$spe,
+                  label_col = "cell_labels_3rd",
+                  title = "After RF applied")
+    
+  ),
+  ncol =1
+)
+```
+
+
+
+
+
+
+## Spatial Evaluation 3rd
+
+```{r}
+spe_pub_type <- rf_pub_3rd$spe[,colData(rf_pub_3rd$spe)$cell_type_pub != "Unknown"]
+# colData(spe_pub_type)$cell_type_pub |> table()
+
+# drop unlabelled from cell_labels
+spe_pub_labels <- rf_pub_3rd$spe[,!is.na(colData(rf_pub_3rd$spe)$cell_labels_pub)]
+
+
+all_labels <- unique(c(
+  as.character(spe_pub_type$cell_labels_3rd),
+  as.character(spe_pub_type$cell_type_pub)
+))
+
+my_colors <- as.vector(pals::polychrome(length(all_labels)))
+names(my_colors) <- all_labels
+
+
+ggpubr::ggarrange(
+  plotlist = list(
+    plot_labelled_cells(
+      spe_pub_type,
+      col_label = "cell_labels_3rd",
+      image_index = 1:8,
+      image_col = "image_name",
+      point_size = 0.3,
+      label_levels = all_labels,  # Forces the legend order to match
+      label_colors = my_colors    # Forces the colors to match
+    )+ theme(title = element_blank(), plot.subtitle = element_blank()),
+    plot_labelled_cells(
+      spe_pub_type,
+      col_label = "cell_type_pub",
+      image_index = 1:8,
+      image_col = "image_name",
+      point_size = 0.3,
+      label_levels = all_labels,
+      label_colors = my_colors
+    )
+    + theme(title = element_blank(), plot.subtitle = element_blank())
+  ),
+  common.legend = TRUE,
+  labels = c("cytoGateR", "Ground Truth classifier"),
+  legend = "bottom",
+  label.y = 1.02
+)
+
+```
+
+
