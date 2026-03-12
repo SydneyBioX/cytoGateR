@@ -1149,3 +1149,144 @@ apply_cutoff_labels <- function(res,
 
 
 
+
+#' Train kNN Reference for Cell Type Prediction
+#' @param spe A SpatialExperiment or SummarizedExperiment object.
+#' @param label_col Column name for initial labels.
+#' @param agreement_thresh Threshold for consensus cleaning (default 0.8).
+#' @param repeats Number of cleaning repeats.
+train_custom_knn <- function(spe,
+                             label_col = "cutoff_label",
+                             assay_name = "norm",
+                             unknown_label = "Unknown",
+                             features = "all",
+                             cv_folds = 5,
+                             repeats = 10,
+                             agreement_thresh = 0.8,
+                             seed = NULL) {
+
+  if (!requireNamespace("class", quietly = TRUE)) stop("Please install 'class' package.")
+  if (!is.null(seed)) set.seed(seed)
+  cytoGateR:::.assert_spe(spe)
+
+  # 1. Feature Prep
+  feat_mat <- SummarizedExperiment::assay(spe, assay_name)
+  features_use <- if (length(features) == 1 && features == "all") rownames(feat_mat) else intersect(features, rownames(feat_mat))
+
+  lab_vec <- SummarizedExperiment::colData(spe)[[label_col]]
+  feature_df <- as.data.frame(t(feat_mat[features_use, , drop = FALSE]))
+
+  core_idx <- which(lab_vec != unknown_label & !is.na(lab_vec))
+  if (length(core_idx) < 10) stop("Not enough core cells for CV cleaning.")
+
+  core_df <- feature_df[core_idx, ]
+  core_labels <- factor(lab_vec[core_idx])
+
+  # --- STAGE 1: CONSENSUS CLEANING ---
+  message(sprintf("Starting kNN label cleaning: %d repeats...", repeats))
+  match_counts <- setNames(numeric(nrow(core_df)), rownames(core_df))
+
+  for (r in seq_len(repeats)) {
+    # Stratified fold assignment
+    fold_assign <- integer(nrow(core_df))
+    for (cls in levels(core_labels)) {
+      cls_idx <- which(core_labels == cls)
+      fold_assign[cls_idx] <- sample(rep(seq_len(cv_folds), length.out = length(cls_idx)))
+    }
+
+    for (k in seq_len(cv_folds)) {
+      train_idx <- which(fold_assign != k); test_idx <- which(fold_assign == k)
+
+      preds <- class::knn(train = core_df[train_idx, ],
+                          test = core_df[test_idx, ],
+                          cl = core_labels[train_idx], k = 5)
+
+      match_counts[test_idx] <- match_counts[test_idx] + as.numeric(preds == core_labels[test_idx])
+    }
+  }
+
+  agreement_rate <- match_counts / repeats
+
+  # 2. Update labels in the SPE object (Matches your RF Logic)
+  inconsistent_names <- names(agreement_rate)[agreement_rate < agreement_thresh]
+  valid_core_names <- names(agreement_rate)[agreement_rate >= agreement_thresh]
+
+  cleaned_labels <- lab_vec
+  # Match by cell names to ensure accuracy
+  cleaned_labels[colnames(spe) %in% inconsistent_names] <- unknown_label
+  SummarizedExperiment::colData(spe)$cleaned_core_label <- cleaned_labels
+
+  message(sprintf("Cleaning complete. Removed %d inconsistent core cells.", length(inconsistent_names)))
+
+  # 3. Return List (Structure matches train_custom_randomForest)
+  return(list(
+    spe = spe,                                      # Now includes the new column
+    reference_data = core_df[valid_core_names, ],    # The "Golden Set" for prediction
+    reference_labels = core_labels[rownames(core_df) %in% valid_core_names],
+    features_used = features_use,
+    agreement_rates = agreement_rate,
+    cleaned_core_names = valid_core_names
+  ))
+}
+
+
+
+#' Predict Unknown Cells using kNN Reference
+#' @param knn_ref Output from train_custom_knn.
+#' @param k Number of neighbors (default 5).
+predict_unknown_with_knn <- function(spe,
+                                     knn_ref,
+                                     assay_name = "norm",
+                                     label_col = "cutoff_label",
+                                     out_col = "knn_label_filled",
+                                     pred_col = "knn_pred",
+                                     unknown_label = "Unknown",
+                                     unassigned_label = "Unassigned",
+                                     threshold = 0.6,
+                                     k = 5) {
+
+  # 1. Feature Prep
+  feat_mat <- SummarizedExperiment::assay(spe, assay_name)
+  feature_df <- as.data.frame(t(feat_mat[knn_ref$features_used, , drop = FALSE]))
+
+  # 2. Get Probabilities (scClassify style)
+  # 'prob = TRUE' returns the proportion of the winning class votes as an attribute
+  knn_res <- class::knn(train = knn_ref$reference_data,
+                        test = feature_df,
+                        cl = knn_ref$reference_labels,
+                        k = k,
+                        prob = TRUE)
+
+  raw_preds <- as.character(knn_res)
+  confidences <- attr(knn_res, "prob")
+
+  # 3. Apply Confidence Thresholding
+  # If the % of neighbor votes < threshold, label as 'Unassigned'
+  final_preds <- ifelse(confidences >= threshold, raw_preds, unassigned_label)
+
+  # 4. Fill into SPE (Hybrid Logic)
+  # We only replace cells that were 'Unknown' in the original OR
+  # cells that were turned into 'Unknown' by the train_custom_knn cleaning step.
+
+  # Step A: Get the current labels (using the cleaned ones if available)
+  current_labels <- if ("cleaned_core_label" %in% names(SummarizedExperiment::colData(spe))) {
+    SummarizedExperiment::colData(spe)$cleaned_core_label
+  } else {
+    SummarizedExperiment::colData(spe)[[label_col]]
+  }
+
+  filled <- current_labels
+
+  # Step B: Identify cells that need a prediction
+  # (Either they were always Unknown, or they failed the cleaning consensus)
+  replace_idx <- is.na(current_labels) | current_labels == unknown_label
+
+  filled[replace_idx] <- final_preds[replace_idx]
+
+  # 5. Store results back to SPE
+  SummarizedExperiment::colData(spe)[[pred_col]] <- final_preds
+  SummarizedExperiment::colData(spe)[[out_col]] <- filled
+  SummarizedExperiment::colData(spe)$knn_confidence <- confidences
+
+  return(spe)
+}
