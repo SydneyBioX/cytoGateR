@@ -513,10 +513,13 @@ train_custom_randomforest <- function(spe,
                                       features = "all",
                                       cv_folds = 5,
                                       repeats = 10,
-                                      agreement_thresh = 0.8) {
+                                      agreement_thresh = 0.8,
+                                      parallel = TRUE) {
 
   if (!is.null(seed)) set.seed(seed)
   .assert_spe(spe)
+
+  num_threads <- if (parallel) max(1, parallel::detectCores(logical = FALSE)) else 1
 
   # 1. Feature Prep
   feat_mat_all <- SummarizedExperiment::assay(spe, assay_name)
@@ -556,7 +559,7 @@ train_custom_randomforest <- function(spe,
     }
     for (k in seq_len(cv_folds)) {
       train_idx <- which(fold_assign != k); test_idx <- which(fold_assign == k)
-      tmp <- ranger::ranger(original_label ~ ., data = core_df[train_idx, ], num.trees = 100)
+      tmp <- ranger::ranger(original_label ~ ., data = core_df[train_idx, ], num.trees = 100, num.threads = num_threads)
       preds <- stats::predict(tmp, core_df[test_idx, ])$predictions
       match_counts[test_idx] <- match_counts[test_idx] + as.numeric(preds == core_df$original_label[test_idx])
     }
@@ -580,7 +583,7 @@ train_custom_randomforest <- function(spe,
 
   for (k in seq_len(cv_folds)) {
     train_idx <- which(eval_fold_assign != k); test_idx <- which(eval_fold_assign == k)
-    eval_mod <- ranger::ranger(original_label ~ ., data = cleaned_df[train_idx, ], num.trees = num.trees)
+    eval_mod <- ranger::ranger(original_label ~ ., data = cleaned_df[train_idx, ], num.trees = num.trees, num.threads = num_threads)
     pk <- stats::predict(eval_mod, cleaned_df[test_idx, ])$predictions
     pk <- factor(pk, levels = levels(cleaned_df$original_label))
     tk <- cleaned_df$original_label[test_idx]
@@ -612,7 +615,7 @@ train_custom_randomforest <- function(spe,
   mtry_val <- if (is.null(mtry)) floor(sqrt(length(features_use))) else mtry
   final_model <- ranger::ranger(original_label ~ ., data = cleaned_df,
                                 num.trees = num.trees, mtry = mtry_val,
-                                probability = TRUE)
+                                probability = TRUE, num.threads = num_threads)
 
   # Update SPE colData
   new_labels <- lab_vec

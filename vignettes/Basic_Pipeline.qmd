@@ -207,7 +207,8 @@ plot_score_hist(res_pub)
 ```{r apply-cutoff}
 res_pub <- apply_cutoff_labels(res_pub,
                                label_col = "cutoff_label",
-                               unknown_label = "Unknown")
+                               unknown_label = "Unknown",
+                               cutoff_fn = function(x) quantile(x, 0.99))
 plot_label_counts(spe = res_pub$spe,
                   label_col = "cutoff_label")
 ```
@@ -241,6 +242,7 @@ plot_class_metrics(class_metrics_pub, title = "Public lineage: per-class metrics
 ## Apply Random Forest to the "Unknown" outside the core group of cells
 
 ```{r apply-rf}
+
 rf_pub$spe <- predict_unknown_with_randomforest(rf_pub$spe,
                                        rf_pub$model,
                                        label_col = "cleaned_core_label",

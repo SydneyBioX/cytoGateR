@@ -15,7 +15,8 @@ train_custom_randomforest(
   features = "all",
   cv_folds = 5,
   repeats = 10,
-  agreement_thresh = 0.8
+  agreement_thresh = 0.8,
+  parallel = TRUE
 )
 }
 \arguments{
