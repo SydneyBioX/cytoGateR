@@ -16,7 +16,8 @@ plot_ct_marker_intensity(
   gmm_model_names = NULL,
   label_levels = NULL,
   label_colors = NULL,
-  drop_levels = FALSE
+  drop_levels = FALSE,
+  assay_name = "norm"
 )
 }
 \arguments{

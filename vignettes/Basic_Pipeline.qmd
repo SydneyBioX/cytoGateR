@@ -1,27 +1,54 @@
 ---
-title: "Basics"
+title: "cytoGateR vignette"
 editor: source
-author: Matthew
-date: "2026-02-15"
+date: now
+date-format: "h:mm a DD MMMM YYYY"
 params:
   evalc: TRUE
   show: 'as.is'
-vignette: >
-  %\VignetteIndexEntry{Basic Pipeline}
-  %\VignetteEngine{quarto::html}
-  %\VignetteEncoding{UTF-8}
 format:
   html:
     toc: true
-    toc_depth: 3
+    toc-depth: 3
     number-sections: true
     theme: cerulean
     highlight: tango
-    code-fold: false
+    code-fold: true
     code-tools: true
     embed-resources: true
     lightbox: true
+    toc-location: left-body
+    toc-title: Contents
+    page-layout: full
+    grid:
+      body-width: 1400px     # Explicitly sets the content width (Standard is ~800px)
+      sidebar-width: 200px   # Keeps sidebar standard size (if you have one)
+      margin-width: 200px
+execute:
+  cache: false
+knitr:
+  opts_chunk:
+    autodep: true
 ---
+
+```{css, echo=FALSE}
+/* 1. Force the Tab Content to take up 100% of the available space */
+.tab-content {
+  width: 100% !important;
+}
+
+/* 2. Force images specifically inside tabs to stretch */
+.tab-content img {
+  width: 100% !important;   /* Stretch to fill container */
+  height: auto !important;  /* Maintain aspect ratio */
+  max-width: none !important; /* Override standard Bootstrap limits */
+}
+
+/* 3. Optional: Ensure the figure container doesn't restrict the image */
+.tab-content figure {
+  width: 100% !important;
+}
+```
 
 # Basic Pipeline Graph
 
@@ -31,15 +58,15 @@ format:
 
 ## Load in the cytoGateR
 
-```{r}
-# devtools::document()
-# devtools::load_all()
+```{r cytoGateR}
+devtools::document()
+devtools::load_all()
 # devtools::install() # for if you want the package on system
 ```
 
 ## Other Libraries
 
-```{r}
+```{r libraries}
 suppressPackageStartupMessages({
   library(tidyverse)
   library(SpatialExperiment)
@@ -311,8 +338,6 @@ ggpubr::ggarrange(
 )
 
 ```
-
-
 
 
 ## Train Random Forest 2nd round

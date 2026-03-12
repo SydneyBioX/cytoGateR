@@ -84,18 +84,19 @@ plot_ct_marker_intensity <- function(spe,
                                      gmm_model_names = NULL,
                                      label_levels = NULL,
                                      label_colors = NULL,
-                                     drop_levels = FALSE) {
+                                     drop_levels = FALSE,
+                                     assay_name = "norm") {
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("Please install ggplot2 to use plot_ct_marker_intensity().")
   }
 
   .assert_spe(spe)
 
-  if (!"norm" %in% SummarizedExperiment::assayNames(spe)) {
-    stop("Assay 'norm' not found in spe.")
+  if (!assay_name %in% SummarizedExperiment::assayNames(spe)) {
+    stop("Assay '", assay_name, "' not found in spe.")
   }
 
-  assay_mat <- SummarizedExperiment::assay(spe, "norm")
+  assay_mat <- SummarizedExperiment::assay(spe, assay_name)
   if (is.null(rownames(assay_mat)) || !marker %in% rownames(assay_mat)) {
     stop("Marker '", marker, "' not found in assay rownames.")
   }
@@ -110,7 +111,7 @@ plot_ct_marker_intensity <- function(spe,
     }
   }
 
-  marker_dist <- SummarizedExperiment::assay(spe, "norm") |>
+  marker_dist <- SummarizedExperiment::assay(spe, assay_name) |>
     t() |>
     as.data.frame() |>
     dplyr::pull(marker)
@@ -631,8 +632,8 @@ plot_label_counts <- function(spe,
 
   ggplot2::ggplot(counts, ggplot2::aes(x = .data$label, y = .data$n, fill = .data$label)) +
     ggplot2::geom_col() +
-    ggplot2::geom_text(ggplot2::aes(label = paste0("n = ", .data$n), y = .data$n),
-                       hjust = -0.1, size = 3) +
+    ggplot2::geom_label(ggplot2::aes(label = paste0("n = ", .data$n), y = .data$n),
+                        hjust = -0.1, size = 3, label.padding = unit(0.3, "lines")) +
     ggplot2::coord_flip() +
     ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, 0.08))) +
     ggplot2::labs(title = title, subtitle = subtitle, x = NULL, y = "Count") +
@@ -684,8 +685,8 @@ plot_label_agreement <- function(spe,
 
   ggplot2::ggplot(agree_df, ggplot2::aes(x = .data$label, y = .data$agreement)) +
     ggplot2::geom_col(fill = "#3182bd") +
-    ggplot2::geom_text(ggplot2::aes(label = sprintf("n = %d", .data$union_n)),
-                       hjust = -0.1, size = 3) +
+    # ggplot2::geom_text(ggplot2::aes(label = sprintf("n = %d", .data$union_n)),
+    #                    hjust = -0.1, size = 3) +
     ggplot2::geom_hline(yintercept = 1, linetype = "dotted", color = "red") +
     ggplot2::coord_flip() +
     ggplot2::scale_y_continuous(breaks = seq(0, 1, by = 0.25),
