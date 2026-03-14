@@ -1158,6 +1158,7 @@ apply_cutoff_labels <- function(res,
 #' @param label_col Column name for initial labels.
 #' @param agreement_thresh Threshold for consensus cleaning (default 0.8).
 #' @param repeats Number of cleaning repeats.
+#' @export
 train_custom_knn <- function(spe,
                              label_col = "cutoff_label",
                              assay_name = "norm",
@@ -1237,6 +1238,7 @@ train_custom_knn <- function(spe,
 #' Predict Unknown Cells using kNN Reference
 #' @param knn_ref Output from train_custom_knn.
 #' @param k Number of neighbors (default 5).
+#' @export
 predict_unknown_with_knn <- function(spe,
                                      knn_ref,
                                      assay_name = "norm",

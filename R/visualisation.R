@@ -633,7 +633,7 @@ plot_label_counts <- function(spe,
   ggplot2::ggplot(counts, ggplot2::aes(x = .data$label, y = .data$n, fill = .data$label)) +
     ggplot2::geom_col() +
     ggplot2::geom_label(ggplot2::aes(label = paste0("n = ", .data$n), y = .data$n),
-                        hjust = -0.1, size = 3, label.padding = unit(0.3, "lines")) +
+                        hjust = -0.1, size = 3) +
     ggplot2::coord_flip() +
     ggplot2::scale_y_continuous(expand = ggplot2::expansion(mult = c(0, 0.08))) +
     ggplot2::labs(title = title, subtitle = subtitle, x = NULL, y = "Count") +
