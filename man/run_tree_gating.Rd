@@ -15,8 +15,7 @@ run_tree_gating(
   neg_strength = 0.4,
   cutoff_method = c("mean", "equal_posteriors"),
   gmm_model_names = NULL,
-  parallel = FALSE,
-  workers = NULL
+  workers = 1
 )
 }
 \arguments{
@@ -51,11 +50,8 @@ One of \code{"mean"} or \code{"equal_posteriors"}.}
 \code{mclust::Mclust()} for 1D GMM fitting (e.g., \code{"V"}, \code{"E"}).
 Use \code{NULL} (default) to allow selection by BIC.}
 
-\item{parallel}{Logical; if \code{TRUE}, build per-cell-type trees in parallel
-using \code{furrr::future_map()}.}
-
 \item{workers}{Optional integer number of workers for parallel execution.
-Defaults to \code{max(1, parallel::detectCores() - 1)} when \code{parallel = TRUE}.}
+Defaults to 1.}
 }
 \value{
 A named list with components:

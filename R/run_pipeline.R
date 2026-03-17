@@ -97,10 +97,8 @@ run_soft_gating <- function(spe, lineage_table,
 #' @param gmm_model_names Optional character vector of model names to pass to
 #'   \code{mclust::Mclust()} for 1D GMM fitting (e.g., \code{"V"}, \code{"E"}).
 #'   Use \code{NULL} (default) to allow selection by BIC.
-#' @param parallel Logical; if \code{TRUE}, build per-cell-type trees in parallel
-#'   using \code{furrr::future_map()}.
 #' @param workers Optional integer number of workers for parallel execution.
-#'   Defaults to \code{max(1, parallel::detectCores() - 1)} when \code{parallel = TRUE}.
+#'   Defaults to 1.
 #'
 #' @return A named list with components:
 #' \describe{
@@ -132,8 +130,8 @@ run_tree_gating <- function(spe,
                             neg_strength = 0.4, # <--- ADD HERE
                             cutoff_method = c("mean", "equal_posteriors"),
                             gmm_model_names = NULL,
-                            parallel = FALSE,
-                            workers = NULL) {
+                            # parallel = FALSE,
+                            workers = 1) {
   cutoff_method <- match.arg(cutoff_method)
 
   .assert_spe(spe)
@@ -178,13 +176,26 @@ run_tree_gating <- function(spe,
     tree
   }
 
-  if (isTRUE(parallel)) {
-    if (is.null(workers)) {
-      workers <- max(1, parallel::detectCores() - 1)
-    }
+  # if (isTRUE(parallel)) {
+  #   if (is.null(workers)) {
+  #     workers <- max(1, parallel::detectCores() - 1)
+  #   }
+  #   oplan <- future::plan(future::multisession, workers = workers)
+  #   on.exit(future::plan(oplan), add = TRUE)
+  #
+  #   trees <- furrr::future_map(
+  #     seq_len(nrow(lineage_table)),
+  #     build_tree,
+  #     .options = furrr::furrr_options(seed = TRUE)
+  #   )
+  # } else {
+  #   trees <- lapply(seq_len(nrow(lineage_table)), build_tree)
+  # }
+
+
+  if (workers > 1) {
     oplan <- future::plan(future::multisession, workers = workers)
     on.exit(future::plan(oplan), add = TRUE)
-
     trees <- furrr::future_map(
       seq_len(nrow(lineage_table)),
       build_tree,
