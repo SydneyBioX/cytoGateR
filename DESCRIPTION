@@ -40,7 +40,8 @@ Imports:
     tidyr,
     RColorBrewer,
     pals,
-    ranger
+    ranger,
+    class
 Suggests:
     viridisLite,
     knitr,
