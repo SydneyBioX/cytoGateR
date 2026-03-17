@@ -172,16 +172,7 @@ custom_labels <- function(spe,
 #' @param agreement_thresh Numeric in [0,1] specifying the minimum agreement rate
 #'   required to keep an originally labelled cell during cleaning (default
 #'   \code{0.8}).
-#' @param parallel Logical; whether to use multiple CPU threads for
-#'   \code{ranger}. If \code{TRUE}, the function uses the number of physical
-#'   cores detected by \code{parallel::detectCores(logical = FALSE)}. If
-#'   \code{FALSE}, a single thread is used. Note that this currently overrides
-#'   the value supplied to \code{num_threads}.
 #' @param num_threads Integer requested number of threads for model fitting.
-#'   This argument is currently not used directly, because the function resets
-#'   the thread count based on \code{parallel}. It is kept for interface
-#'   compatibility.
-#'
 #'
 #' @return A named list with components:
 #' \describe{
@@ -524,13 +515,13 @@ train_custom_randomforest <- function(spe,
                                       cv_folds = 5,
                                       repeats = 10,
                                       agreement_thresh = 0.8,
-                                      parallel = TRUE,
+                                      # parallel = TRUE,
                                       num_threads=2) {
 
   if (!is.null(seed)) set.seed(seed)
   .assert_spe(spe)
 
-  num_threads <- if (parallel) max(1, parallel::detectCores(logical = FALSE)) else 1
+  # num_threads <- if (parallel) max(1, parallel::detectCores(logical = FALSE)) else 1
 
   # 1. Feature Prep
   feat_mat_all <- SummarizedExperiment::assay(spe, assay_name)
