@@ -172,6 +172,16 @@ custom_labels <- function(spe,
 #' @param agreement_thresh Numeric in [0,1] specifying the minimum agreement rate
 #'   required to keep an originally labelled cell during cleaning (default
 #'   \code{0.8}).
+#' @param parallel Logical; whether to use multiple CPU threads for
+#'   \code{ranger}. If \code{TRUE}, the function uses the number of physical
+#'   cores detected by \code{parallel::detectCores(logical = FALSE)}. If
+#'   \code{FALSE}, a single thread is used. Note that this currently overrides
+#'   the value supplied to \code{num_threads}.
+#' @param num_threads Integer requested number of threads for model fitting.
+#'   This argument is currently not used directly, because the function resets
+#'   the thread count based on \code{parallel}. It is kept for interface
+#'   compatibility.
+#'
 #'
 #' @return A named list with components:
 #' \describe{
@@ -514,7 +524,8 @@ train_custom_randomforest <- function(spe,
                                       cv_folds = 5,
                                       repeats = 10,
                                       agreement_thresh = 0.8,
-                                      parallel = TRUE) {
+                                      parallel = TRUE,
+                                      num_threads=2) {
 
   if (!is.null(seed)) set.seed(seed)
   .assert_spe(spe)
@@ -1152,12 +1163,50 @@ apply_cutoff_labels <- function(res,
 
 
 
-
 #' Train kNN Reference for Cell Type Prediction
-#' @param spe A SpatialExperiment or SummarizedExperiment object.
-#' @param label_col Column name for initial labels.
-#' @param agreement_thresh Threshold for consensus cleaning (default 0.8).
-#' @param repeats Number of cleaning repeats.
+#'
+#' Trains a kNN-based cell type classifier using a consensus cleaning approach.
+#' Core cells are iteratively validated across repeated cross-validation folds,
+#' and cells with low label agreement are reassigned as unknown before a clean
+#' reference set is returned for downstream prediction.
+#'
+#' @param spe A \code{SpatialExperiment} or \code{SummarizedExperiment} object
+#'   containing cell data.
+#' @param label_col Character string specifying the column in \code{colData(spe)}
+#'   containing the initial cell type labels. Default is \code{"cutoff_label"}.
+#' @param assay_name Character string specifying the assay to use for marker
+#'   expression. Default is \code{"norm"}.
+#' @param unknown_label Character string specifying the label used to identify
+#'   unknown or unclassified cells, which are excluded from training. Default is
+#'   \code{"Unknown"}.
+#' @param features Either \code{"all"} to use all features in the assay, or a
+#'   character vector of feature names to subset. Default is \code{"all"}.
+#' @param cv_folds Integer specifying the number of cross-validation folds used
+#'   during consensus cleaning. Default is \code{5}.
+#' @param repeats Integer specifying the number of cleaning repetitions. Higher
+#'   values produce more stable agreement rates. Default is \code{10}.
+#' @param agreement_thresh Numeric value between 0 and 1 specifying the minimum
+#'   proportion of repeats a cell must be correctly predicted to be retained in
+#'   the reference set. Default is \code{0.8}.
+#' @param seed Optional integer for random seed to ensure reproducibility.
+#'   Default is \code{NULL}.
+#'
+#' @return A named list containing:
+#' \describe{
+#'   \item{\code{spe}}{The input \code{SpatialExperiment} object with a new
+#'     \code{cleaned_core_label} column added to \code{colData}.}
+#'   \item{\code{reference_data}}{A data frame of marker expression for the
+#'     high-confidence reference cells.}
+#'   \item{\code{reference_labels}}{A factor of cell type labels corresponding
+#'     to \code{reference_data}.}
+#'   \item{\code{features_used}}{Character vector of feature names used in
+#'     training.}
+#'   \item{\code{agreement_rates}}{Named numeric vector of per-cell agreement
+#'     rates from consensus cleaning.}
+#'   \item{\code{cleaned_core_names}}{Character vector of cell names retained
+#'     in the reference set after cleaning.}
+#' }
+#'
 #' @export
 train_custom_knn <- function(spe,
                              label_col = "cutoff_label",
@@ -1171,7 +1220,7 @@ train_custom_knn <- function(spe,
 
   if (!requireNamespace("class", quietly = TRUE)) stop("Please install 'class' package.")
   if (!is.null(seed)) set.seed(seed)
-  cytoGateR:::.assert_spe(spe)
+  .assert_spe(spe)
 
   # 1. Feature Prep
   feat_mat <- SummarizedExperiment::assay(spe, assay_name)
@@ -1236,8 +1285,37 @@ train_custom_knn <- function(spe,
 
 
 #' Predict Unknown Cells using kNN Reference
-#' @param knn_ref Output from train_custom_knn.
-#' @param k Number of neighbors (default 5).
+#'
+#' Uses a trained kNN model to predict cell types for cells labelled as Unknown
+#' or Unassigned, based on marker expression from a specified assay.
+#'
+#' @param spe A \code{SpatialExperiment} object containing cell data.
+#' @param knn_ref Output from \code{train_custom_knn()}, containing the trained
+#'   kNN model and reference data.
+#' @param assay_name Character string specifying the assay to use for marker
+#'   expression. Default is \code{"norm"}.
+#' @param label_col Character string specifying the column in \code{colData(spe)}
+#'   containing the initial cell type labels. Default is \code{"cutoff_label"}.
+#' @param out_col Character string specifying the name of the output column added
+#'   to \code{colData(spe)} containing the final filled labels. Default is
+#'   \code{"knn_label_filled"}.
+#' @param pred_col Character string specifying the name of the output column added
+#'   to \code{colData(spe)} containing the raw kNN predictions. Default is
+#'   \code{"knn_pred"}.
+#' @param unknown_label Character string specifying the label used to identify
+#'   unknown cells. Default is \code{"Unknown"}.
+#' @param unassigned_label Character string specifying the label used to identify
+#'   unassigned cells. Default is \code{"Unassigned"}.
+#' @param threshold Numeric value between 0 and 1 specifying the minimum
+#'   proportion of neighbours required to agree on a label for a prediction to
+#'   be accepted. Default is \code{0.6}.
+#' @param k Integer specifying the number of nearest neighbours to use for
+#'   prediction. Default is \code{5}.
+#'
+#' @return A \code{SpatialExperiment} object with two new columns added to
+#'   \code{colData}: \code{out_col} containing the final predicted labels and
+#'   \code{pred_col} containing the raw kNN predictions.
+#'
 #' @export
 predict_unknown_with_knn <- function(spe,
                                      knn_ref,

@@ -17,14 +17,55 @@ train_custom_knn(
 )
 }
 \arguments{
-\item{spe}{A SpatialExperiment or SummarizedExperiment object.}
+\item{spe}{A \code{SpatialExperiment} or \code{SummarizedExperiment} object
+containing cell data.}
 
-\item{label_col}{Column name for initial labels.}
+\item{label_col}{Character string specifying the column in \code{colData(spe)}
+containing the initial cell type labels. Default is \code{"cutoff_label"}.}
 
-\item{repeats}{Number of cleaning repeats.}
+\item{assay_name}{Character string specifying the assay to use for marker
+expression. Default is \code{"norm"}.}
 
-\item{agreement_thresh}{Threshold for consensus cleaning (default 0.8).}
+\item{unknown_label}{Character string specifying the label used to identify
+unknown or unclassified cells, which are excluded from training. Default is
+\code{"Unknown"}.}
+
+\item{features}{Either \code{"all"} to use all features in the assay, or a
+character vector of feature names to subset. Default is \code{"all"}.}
+
+\item{cv_folds}{Integer specifying the number of cross-validation folds used
+during consensus cleaning. Default is \code{5}.}
+
+\item{repeats}{Integer specifying the number of cleaning repetitions. Higher
+values produce more stable agreement rates. Default is \code{10}.}
+
+\item{agreement_thresh}{Numeric value between 0 and 1 specifying the minimum
+proportion of repeats a cell must be correctly predicted to be retained in
+the reference set. Default is \code{0.8}.}
+
+\item{seed}{Optional integer for random seed to ensure reproducibility.
+Default is \code{NULL}.}
+}
+\value{
+A named list containing:
+\describe{
+  \item{\code{spe}}{The input \code{SpatialExperiment} object with a new
+    \code{cleaned_core_label} column added to \code{colData}.}
+  \item{\code{reference_data}}{A data frame of marker expression for the
+    high-confidence reference cells.}
+  \item{\code{reference_labels}}{A factor of cell type labels corresponding
+    to \code{reference_data}.}
+  \item{\code{features_used}}{Character vector of feature names used in
+    training.}
+  \item{\code{agreement_rates}}{Named numeric vector of per-cell agreement
+    rates from consensus cleaning.}
+  \item{\code{cleaned_core_names}}{Character vector of cell names retained
+    in the reference set after cleaning.}
+}
 }
 \description{
-Train kNN Reference for Cell Type Prediction
+Trains a kNN-based cell type classifier using a consensus cleaning approach.
+Core cells are iteratively validated across repeated cross-validation folds,
+and cells with low label agreement are reassigned as unknown before a clean
+reference set is returned for downstream prediction.
 }

@@ -70,6 +70,7 @@ plot_marker_priority_tree <- function(lineage_table, marker_stats, cell_type_nam
 #'   label levels. If provided alongside `label_levels`, lengths must match.
 #' @param drop_levels Logical; if FALSE, keep unused levels in the legend.
 #'   Default FALSE.
+#' @param assay_name Assay name to pull values from. Default "norm".
 #'
 #' @return A `ggplot` object.
 #' @export

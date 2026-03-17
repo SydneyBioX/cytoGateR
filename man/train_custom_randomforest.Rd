@@ -16,7 +16,8 @@ train_custom_randomforest(
   cv_folds = 5,
   repeats = 10,
   agreement_thresh = 0.8,
-  parallel = TRUE
+  parallel = TRUE,
+  num_threads = 2
 )
 }
 \arguments{
@@ -51,6 +52,17 @@ cleaning (default \code{10}).}
 \item{agreement_thresh}{Numeric in [0,1] specifying the minimum agreement rate
 required to keep an originally labelled cell during cleaning (default
 \code{0.8}).}
+
+\item{parallel}{Logical; whether to use multiple CPU threads for
+\code{ranger}. If \code{TRUE}, the function uses the number of physical
+cores detected by \code{parallel::detectCores(logical = FALSE)}. If
+\code{FALSE}, a single thread is used. Note that this currently overrides
+the value supplied to \code{num_threads}.}
+
+\item{num_threads}{Integer requested number of threads for model fitting.
+This argument is currently not used directly, because the function resets
+the thread count based on \code{parallel}. It is kept for interface
+compatibility.}
 }
 \value{
 A named list with components:

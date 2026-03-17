@@ -48,6 +48,8 @@ label levels. If provided alongside `label_levels`, lengths must match.}
 
 \item{drop_levels}{Logical; if FALSE, keep unused levels in the legend.
 Default FALSE.}
+
+\item{assay_name}{Assay name to pull values from. Default "norm".}
 }
 \value{
 A `ggplot` object.
