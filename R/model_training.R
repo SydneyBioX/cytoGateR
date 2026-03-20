@@ -1364,3 +1364,218 @@ predict_unknown_with_knn <- function(spe,
 
   return(spe)
 }
+
+
+
+
+
+
+
+
+
+#' Multi-Metric Weighted kNN
+#'
+#' @param train_data Data frame or matrix of training cells (rows = markers, cols = cells).
+#' @param test_data Data frame or matrix of test cells (rows = markers, cols = cells).
+#' @param train_labels Factor of labels for the training data.
+#' @param k Number of neighbors.
+#' @param method One of "pearson", "spearman", "cosine", or "euclidean".
+#'
+#' @return A list containing predicted 'labels' and 'probs'.
+predict_wknn_multi <- function(train_data,
+                               test_data,
+                               train_labels,
+                               k = 5,
+                               method = "pearson") {
+
+  # Ensure data is matrix format for fast calculation
+  train_mat <- t(as.matrix(train_data))
+  test_mat <- t(as.matrix(test_data))
+
+  # Safety Check: Do the number of markers match?
+  if (nrow(train_mat) != nrow(test_mat)) {
+    stop(sprintf("Dimension mismatch! Train has %d markers, Test has %d markers.
+                  Ensure both matrices are Cells (rows) x Markers (columns).",
+                 ncol(train_mat), ncol(test_mat)))
+  }
+
+
+  # 1. Calculate the Similarity/Distance Matrix
+  if (method %in% c("pearson", "spearman")) {
+    # Correlation: higher is more similar
+    score_mat <- cor(test_mat, train_mat, method = method)
+    is_distance <- FALSE
+
+  } else if (method == "cosine") {
+    # Cosine Similarity: higher is more similar
+    # Normalize vectors to unit length then take dot product
+    # norm_train <- lsa::cosine(t(train_mat)) # Using lsa package or manual math:
+    # norm_train <- 1 - as.matrix(proxy::dist(t(test_mat), t(train_mat), method = "cosine"))
+    # Manual: (A . B) / (|A||B|)
+    cp <- crossprod(test_mat, train_mat)
+    rn <- sqrt(colSums(test_mat^2))
+    cn <- sqrt(colSums(train_mat^2))
+    score_mat <- cp / outer(rn, cn)
+    is_distance <- FALSE
+
+  } else if (method == "euclidean") {
+    # Euclidean: lower is more similar (distance)
+    score_mat <- as.matrix(proxy::dist(t(test_mat), t(train_mat), method = "Euclidean"))
+    is_distance <- TRUE
+  }
+
+  # 2. Process each test cell to find neighbors
+  results <- apply(score_mat, 1, function(scores) {
+
+    # Identify Top K
+    if (is_distance) {
+      top_k_idx <- order(scores, decreasing = FALSE)[1:k]
+      # Convert distance to a weight (Inverse distance)
+      # Add small epsilon to avoid division by zero
+      weights <- 1 / (scores[top_k_idx] + 1e-6)
+    } else {
+      top_k_idx <- order(scores, decreasing = TRUE)[1:k]
+      # Use raw similarity as weight (clipping negative correlations to 0)
+      weights <- pmax(scores[top_k_idx], 0)
+    }
+
+    top_labels <- train_labels[top_k_idx]
+
+    # 3. Weighted Voting
+    # Sum the weights for each unique label found in the neighbors
+    label_sums <- tapply(weights, top_labels, sum)
+    label_sums[is.na(label_sums)] <- 0
+
+    best_label <- names(sort(label_sums, decreasing = TRUE))[1]
+
+    # Probability is the winning weight sum divided by total weight sum
+    prob <- max(label_sums) / sum(weights)
+
+    return(list(label = best_label, prob = prob))
+  })
+
+  # Format output as a clean list
+  return(list(
+    labels = sapply(results, `[[`, "label"),
+    probs = sapply(results, `[[`, "prob")
+  ))
+}
+
+
+
+
+#' Recursive Hierarchical kNN with BiocParallel Ensemble
+#'
+#' @param spe SpatialExperiment object.
+#' @param hier_ref List of node-specific references from build_hierarchical_reference.
+#' @param hc_tree hclust object defining the hierarchy.
+#' @param assay_name Assay to use (default "exprs").
+#' @param threshold Confidence threshold (average kNN probability).
+#' @param agreement_threshold Minimum \% of ensemble members that must agree (0-1).
+#' @param k Number of neighbors for kNN.
+#' @param repeats Number of bootstrap repeats per distance method.
+#' @param dist_methods Vector of methods, e.g., c("pearson", "cosine").
+#' @param BPPARAM BiocParallel parameter (default: SerialParam()).
+#' @param out_col Column name for final labels.
+#' @export
+predict_hierarchical_knn_recursive <- function(spe,
+                                               hier_ref,
+                                               hc_tree,
+                                               assay_name = "exprs",
+                                               threshold = 0.7,
+                                               agreement_threshold = 0.8,
+                                               k = 5,
+                                               repeats = 5,
+                                               dist_methods = c("pearson", "cosine"),
+                                               BPPARAM = BiocParallel::SerialParam(),
+                                               out_col = "hier_label") {
+
+  .assert_spe(spe)
+  n_cells <- ncol(spe)
+  feat_mat <- SummarizedExperiment::assay(spe, assay_name)
+
+  # Initialize results in parent scope
+  final_labels <- rep(NA_character_, n_cells)
+  root_node_idx <- nrow(hc_tree$merge)
+
+  # --- Internal Recursive Processor ---
+  process_node <- function(node_idx, active_indices) {
+    if (length(active_indices) == 0) return()
+
+    node_id <- paste0("Node_", node_idx)
+    ref <- hier_ref[[node_id]]
+
+    # Subset features for this node (Cells x Markers)
+    test_data <- t(as.matrix(feat_mat[ref$markers, active_indices, drop = FALSE]))
+    train_data <- as.matrix(ref$train_data) # Already Cells x Markers
+
+    # --- Ensemble Step ---
+    # Run multiple methods and bootstraps in parallel
+    task_grid <- expand.grid(method = dist_methods, r = seq_len(repeats), stringsAsFactors = FALSE)
+
+    ensemble_results <- BiocParallel::bplapply(seq_len(nrow(task_grid)), function(i) {
+      m <- task_grid$method[i]
+      # Bootstrap 80% of training data
+      boot_idx <- sample(seq_len(nrow(train_data)), size = floor(0.8 * nrow(train_data)))
+
+      # Use our multi-metric engine
+      predict_wknn_multi(
+        train_data = train_data[boot_idx, , drop = FALSE],
+        test_data = test_data,
+        train_labels = ref$train_labels[boot_idx],
+        k = k,
+        method = m
+      )
+    }, BPPARAM = BPPARAM)
+
+    # --- Consensus Gathering ---
+    all_votes <- do.call(cbind, lapply(ensemble_results, `[[`, "labels"))
+    all_probs <- do.call(cbind, lapply(ensemble_results, `[[`, "probs"))
+
+    # 1. Majority Vote
+    node_preds <- apply(all_votes, 1, function(x) {
+      tbl <- table(x)
+      names(sort(tbl, decreasing = TRUE))[1]
+    })
+
+    # 2. Agreement Score & Average Confidence
+    node_agreement <- rowSums(all_votes == node_preds) / ncol(all_votes)
+    node_avg_probs <- rowMeans(all_probs)
+
+    # --- Gatekeeping ---
+    # Cell must pass BOTH the probability threshold and the ensemble agreement
+    uncertain_mask <- (node_avg_probs < threshold) | (node_agreement < agreement_threshold)
+
+    if (any(uncertain_mask)) {
+      final_labels[active_indices[uncertain_mask]] <<- paste0(node_id, "_unassigned")
+    }
+
+    # --- Routing ---
+    certain_idx <- which(!uncertain_mask)
+    if (length(certain_idx) > 0) {
+      preds_certain <- node_preds[certain_idx]
+      indices_certain <- active_indices[certain_idx]
+
+      for (choice in c("Left", "Right")) {
+        group_idx <- indices_certain[preds_certain == choice]
+        if (length(group_idx) == 0) next
+
+        side_idx <- if(choice == "Left") 1 else 2
+        child_val <- hc_tree$merge[node_idx, side_idx]
+
+        if (child_val < 0) {
+          final_labels[group_idx] <<- hc_tree$labels[-child_val]
+        } else {
+          process_node(child_val, group_idx)
+        }
+      }
+    }
+  }
+
+  message(sprintf("Starting recursive ensemble classification for %d cells...", n_cells))
+  process_node(root_node_idx, seq_len(n_cells))
+
+  SummarizedExperiment::colData(spe)[[out_col]] <- final_labels
+  return(spe)
+}
+

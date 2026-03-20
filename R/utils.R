@@ -38,3 +38,52 @@
     ) |>
     dplyr::filter(lengths(.data$pos_markers) > 0)
 }
+
+
+
+
+#' Calculate F1 Score per Cell Type
+#'
+#' @param spe SpatialExperiment object
+#' @param ref_col Column name for ground truth (e.g., "manual_label")
+#' @param pred_col Column name for results (e.g., "hier_label")
+#'
+#' @return A data frame with Precision, Recall, and F1 score per type
+#' @export
+calculate_f1 <- function(spe, ref_col = "ref_broad", pred_col = "pred_broad") {
+  df <- as.data.frame(SummarizedExperiment::colData(spe))
+
+  # Get only the broad categories we care about
+  types <- unique(as.character(df[[ref_col]]))
+  types <- types[!is.na(types) & !grepl("unassigned|undefined", types, ignore.case = TRUE)]
+
+  results <- lapply(types, function(type) {
+    tp <- sum(df[[pred_col]] == type & df[[ref_col]] == type, na.rm = TRUE)
+    fp <- sum(df[[pred_col]] == type & df[[ref_col]] != type, na.rm = TRUE)
+    fn <- sum(df[[pred_col]] != type & df[[ref_col]] == type, na.rm = TRUE)
+
+    precision <- if ((tp + fp) > 0) tp / (tp + fp) else 0
+    recall    <- if ((tp + fn) > 0) tp / (tp + fn) else 0
+
+    # Correct harmonic mean formula
+    f1 <- if ((precision + recall) > 0) {
+      2 * (precision * recall) / (precision * recall)
+    } else {
+      0
+    }
+
+    # WAIT! I see the typo in my previous logic:
+    # It should be 2 * (p * r) / (p + r). Let's fix that below:
+    f1_actual <- if ((precision + recall) > 0) (2 * precision * recall) / (precision + recall) else 0
+
+    data.frame(
+      Category = type,
+      Precision = round(precision, 3),
+      Recall = round(recall, 3),
+      F1_Score = round(f1_actual, 3),
+      Cell_Count = sum(df[[ref_col]] == type, na.rm = TRUE)
+    )
+  })
+
+  do.call(rbind, results)
+}

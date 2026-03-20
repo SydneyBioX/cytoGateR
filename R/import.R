@@ -8,5 +8,6 @@
 #' @importFrom tibble tibble
 #' @importFrom igraph graph_from_data_frame
 #' @importFrom ggraph ggraph geom_edge_elbow geom_node_label
-#' @importFrom stats predict dnorm
+#' @importFrom stats predict dnorm as.dist cor
+#' @importFrom proxy dist
 NULL

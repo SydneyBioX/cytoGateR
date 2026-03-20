@@ -40,7 +40,9 @@ Imports:
     RColorBrewer,
     pals,
     ranger,
-    class
+    class,
+    proxy,
+    BiocParallel
 Suggests:
     viridisLite,
     knitr,
