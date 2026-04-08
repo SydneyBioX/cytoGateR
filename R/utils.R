@@ -55,7 +55,7 @@ calculate_f1 <- function(spe, ref_col = "ref_broad", pred_col = "pred_broad") {
 
   # Get only the broad categories we care about
   types <- unique(as.character(df[[ref_col]]))
-  types <- types[!is.na(types) & !grepl("unassigned|undefined", types, ignore.case = TRUE)]
+  types <- types[!is.na(types) & !grepl("unassigned|undefined|unknown", types, ignore.case = TRUE)]
 
   results <- lapply(types, function(type) {
     tp <- sum(df[[pred_col]] == type & df[[ref_col]] == type, na.rm = TRUE)
