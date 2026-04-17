@@ -45,6 +45,13 @@ values produce more stable agreement rates. Default is \code{10}.}
 proportion of repeats a cell must be correctly predicted to be retained in
 the reference set. Default is \code{0.8}.}
 
+\item{k}{Integer specifying the number of nearest neighbours used in the
+kNN classifier during consensus cleaning. Default is \code{5}.}
+
+\item{method}{Character string specifying the similarity or distance metric
+used for kNN. Options include \code{"pearson"}, \code{"spearman"},
+\code{"cosine"}, or \code{"euclidean"}. Default is \code{"pearson"}.}
+
 \item{seed}{Optional integer for random seed to ensure reproducibility.
 Default is \code{NULL}.}
 }

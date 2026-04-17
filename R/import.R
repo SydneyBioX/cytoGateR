@@ -10,4 +10,5 @@
 #' @importFrom ggraph ggraph geom_edge_elbow geom_node_label
 #' @importFrom stats predict dnorm as.dist cor
 #' @importFrom proxy dist
+#' @importFrom dbscan kNN
 NULL

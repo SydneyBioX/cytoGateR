@@ -50,6 +50,10 @@ be accepted. Default is \code{0.6}.}
 
 \item{k}{Integer specifying the number of nearest neighbours to use for
 prediction. Default is \code{5}.}
+
+\item{dist_method}{Character string specifying the distance metric used for
+kNN similarity calculation (e.g., \code{"pearson"}, \code{"cosine"},
+\code{"euclidean"}). Default is \code{"pearson"}.}
 }
 \value{
 A \code{SpatialExperiment} object with two new columns added to

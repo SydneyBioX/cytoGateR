@@ -41,6 +41,10 @@ predict_hierarchical_knn_recursive(
 \item{BPPARAM}{BiocParallel parameter (default: SerialParam()).}
 
 \item{out_col}{Column name for final labels.}
+
+\item{chunk_size}{Integer specifying the number of cells processed per chunk
+during prediction. Increasing this value may improve speed but requires
+more memory. Default is \code{1000L}}
 }
 \description{
 Recursive Hierarchical kNN with BiocParallel Ensemble

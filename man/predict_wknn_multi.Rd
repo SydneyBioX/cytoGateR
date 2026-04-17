@@ -22,7 +22,11 @@ predict_wknn_multi(
 
 \item{k}{Number of neighbors.}
 
-\item{method}{One of "pearson", "spearman", "cosine", or "euclidean".}
+\item{method}{One of "pearson", "spearman", "cosine", or "euclidean"}
+
+\item{return_matrix}{Logical indicating whether to return the full probability
+matrix for all classes. If \code{FALSE}, only the predicted labels and
+associated probabilities are returned. Default is \code{FALSE}.}
 }
 \value{
 A list containing predicted 'labels' and 'probs'.

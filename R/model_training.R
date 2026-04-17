@@ -795,6 +795,11 @@ apply_cutoff_labels <- function(res,
 #' @param agreement_thresh Numeric value between 0 and 1 specifying the minimum
 #'   proportion of repeats a cell must be correctly predicted to be retained in
 #'   the reference set. Default is \code{0.8}.
+#' @param k Integer specifying the number of nearest neighbours used in the
+#'   kNN classifier during consensus cleaning. Default is \code{5}.
+#' @param method Character string specifying the similarity or distance metric
+#'   used for kNN. Options include \code{"pearson"}, \code{"spearman"},
+#'   \code{"cosine"}, or \code{"euclidean"}. Default is \code{"pearson"}.
 #' @param seed Optional integer for random seed to ensure reproducibility.
 #'   Default is \code{NULL}.
 #'
@@ -935,6 +940,9 @@ train_custom_knn <- function(spe,
 #'   be accepted. Default is \code{0.6}.
 #' @param k Integer specifying the number of nearest neighbours to use for
 #'   prediction. Default is \code{5}.
+#' @param dist_method Character string specifying the distance metric used for
+#'   kNN similarity calculation (e.g., \code{"pearson"}, \code{"cosine"},
+#'   \code{"euclidean"}). Default is \code{"pearson"}.
 #'
 #' @return A \code{SpatialExperiment} object with two new columns added to
 #'   \code{colData}: \code{out_col} containing the final predicted labels and
@@ -1026,7 +1034,10 @@ predict_unknown_with_knn <- function(spe,
 #' @param test_data Data frame or matrix of test cells (rows = markers, cols = cells).
 #' @param train_labels Factor of labels for the training data.
 #' @param k Number of neighbors.
-#' @param method One of "pearson", "spearman", "cosine", or "euclidean".
+#' @param method One of "pearson", "spearman", "cosine", or "euclidean"
+#' @param return_matrix Logical indicating whether to return the full probability
+#'   matrix for all classes. If \code{FALSE}, only the predicted labels and
+#'   associated probabilities are returned. Default is \code{FALSE}.
 #'
 #' @return A list containing predicted 'labels' and 'probs'.
 predict_wknn_multi <- function(train_data,
@@ -1134,6 +1145,9 @@ predict_wknn_multi <- function(train_data,
 #' @param dist_methods Vector of methods, e.g., c("pearson", "cosine").
 #' @param BPPARAM BiocParallel parameter (default: SerialParam()).
 #' @param out_col Column name for final labels.
+#' @param chunk_size Integer specifying the number of cells processed per chunk
+#'   during prediction. Increasing this value may improve speed but requires
+#'   more memory. Default is \code{1000L}
 #' @export
 predict_hierarchical_knn_recursive <- function(spe,
                                                hier_ref,
@@ -1148,7 +1162,7 @@ predict_hierarchical_knn_recursive <- function(spe,
                                                out_col      = "hier_label",
                                                chunk_size   = 1000L) {   # <-- NEW
 
-  cytoGateR:::.assert_spe(spe)
+  .assert_spe(spe)
   n_cells    <- ncol(spe)
 
   # FIX 1: Materialise the full dense matrix ONCE here.
@@ -1201,7 +1215,7 @@ predict_hierarchical_knn_recursive <- function(spe,
           # allocates only its own 80 % slice, not a copy visible to the parent.
           boot_idx <- sample.int(n_train, size = floor(0.8 * n_train))
 
-          res <- cytoGateR:::predict_wknn_multi(
+          res <- predict_wknn_multi(
             train_data   = train_mat[boot_idx, , drop = FALSE],
             test_data    = test_chunk,
             train_labels = ref$train_labels[boot_idx],
