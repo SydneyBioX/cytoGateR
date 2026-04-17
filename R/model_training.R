@@ -202,308 +202,6 @@ custom_labels <- function(spe,
 #' thresholding workflows.
 #'
 #' @export
-# train_custom_rf <- function(spe,
-#                             label_col = "custom_label",
-#                             assay_name = "norm",
-#                             unknown_label = "Unknown",
-#                             train_frac = 0.8,
-#                             num.trees = 200,
-#                             mtry = NULL,
-#                             seed = NULL,
-#                             features="lineage",
-#                             cv_folds = 5) {
-#   .assert_spe(spe)
-#   if (!label_col %in% colnames(SummarizedExperiment::colData(spe))) {
-#     stop("label_col not found in colData(spe).")
-#   }
-#   if (!assay_name %in% SummarizedExperiment::assayNames(spe)) {
-#     stop(paste0("Assay '", assay_name, "' not found in spe."))
-#   }
-#
-#
-#
-#   if (is.character(features)) {
-#
-#     if (length(features) == 1 && features %in% c("all")) {
-#       # keyword mode
-#       features_use <- rownames(feat_mat)
-#     } else {
-#       # explicit marker vector
-#       features_use <- features
-#     }
-#
-#   } else {
-#     stop("features must be 'lineage', 'all', or a character vector of markers")
-#   }
-#
-#
-#
-#
-#   lab_vec <- SummarizedExperiment::colData(spe)[[label_col]]
-#   feat_mat <- SummarizedExperiment::assay(spe, assay_name)
-#
-#
-#
-#
-#   features_use <- unique(features_use)
-#   present <- intersect(features_use, rownames(feat_mat))
-#   missing <- setdiff(features_use, rownames(feat_mat))
-#
-#   if (length(present) < 1) {
-#     stop("None of the requested features are present in the assay rownames().")
-#   }
-#   if (length(missing) > 0) {
-#     warning("Dropping missing features (not found in rownames(assay)): ",
-#             paste(head(missing, 20), collapse = ", "),
-#             if (length(missing) > 20) paste0(" ... (+", length(missing) - 20, " more)") else "")
-#   }
-#
-#   feat_mat <- feat_mat[present, , drop = FALSE]
-#
-#   feature_df <- as.data.frame(t(feat_mat))
-#   feature_df$cell_id <- colnames(spe)
-#
-#   df <- feature_df
-#   df[[label_col]] <- lab_vec
-#
-#   labelled_df <- df[!(is.na(df[[label_col]]) | df[[label_col]] == unknown_label), , drop = FALSE]
-#
-#   if (nrow(labelled_df) < 2) stop("Not enough labelled cells to train model.")
-#
-#   labelled_df[[label_col]] <- factor(labelled_df[[label_col]])
-#   n_classes <- nlevels(labelled_df[[label_col]])
-#   if (n_classes < 2) stop("At least two classes are required to train the model.")
-#
-#   if (!is.null(seed)) set.seed(seed)
-#
-#   p <- ncol(labelled_df) - 2  # exclude cell_id and label
-#   if (p < 1) stop("Feature matrix has zero columns; cannot train model.")
-#   mtry_val <- if (is.null(mtry)) max(1, floor(sqrt(p))) else mtry
-#
-#   # Cross-validation always (degenerate case cv_folds = 1 allowed)
-#   cv_folds <- max(1, min(cv_folds, nrow(labelled_df)))
-#   fold_assign <- integer(nrow(labelled_df))
-#   for (cls in levels(labelled_df[[label_col]])) {
-#     idx <- which(labelled_df[[label_col]] == cls)
-#     fold_ids <- rep(seq_len(cv_folds), length.out = length(idx))
-#     fold_assign[idx] <- sample(fold_ids)
-#   }
-#
-#   formula <- stats::as.formula(paste(label_col, "~ ."))
-#
-#   f1_macro <- function(truth, pred) {
-#     classes <- union(levels(truth), levels(pred))
-#     f1s <- sapply(classes, function(cls) {
-#       tp <- sum(truth == cls & pred == cls)
-#       fp <- sum(truth != cls & pred == cls)
-#       fn <- sum(truth == cls & pred != cls)
-#       prec <- ifelse(tp + fp == 0, 0, tp / (tp + fp))
-#       rec <- ifelse(tp + fn == 0, 0, tp / (tp + fn))
-#       ifelse(prec + rec == 0, 0, 2 * prec * rec / (prec + rec))
-#     })
-#     mean(f1s)
-#   }
-#
-#   overall_list <- vector("list", cv_folds)
-#   class_list <- vector("list", cv_folds)
-#   all_truth <- labelled_df[[label_col]]
-#   all_pred <- factor(rep(NA_character_, nrow(labelled_df)), levels = levels(all_truth))
-#
-#   for (k in seq_len(cv_folds)) {
-#     train_k <- labelled_df[fold_assign != k, , drop = FALSE]
-#     test_k  <- labelled_df[fold_assign == k, , drop = FALSE]
-#
-#     if (nrow(train_k) < 2 || nrow(test_k) < 1) next
-#
-#     train_k$cell_id <- NULL
-#     test_k$cell_id <- NULL
-#
-#     model_k <- ranger::ranger(
-#       formula,
-#       data = train_k,
-#       num.trees = num.trees,
-#       mtry = mtry_val,
-#       num.threads = max(1, parallel::detectCores(logical = FALSE))
-#     )
-#
-#     pred_k <- stats::predict(model_k, test_k)$predictions
-#     pred_k <- factor(pred_k, levels = levels(all_truth))
-#     truth_k <- test_k[[label_col]]
-#
-#     all_pred[fold_assign == k] <- pred_k
-#
-#     overall_list[[k]] <- data.frame(
-#       fold = k,
-#       accuracy = mean(pred_k == truth_k),
-#       f1_macro = f1_macro(truth_k, pred_k)
-#     )
-#
-#     classes <- union(levels(truth_k), levels(pred_k))
-#     class_list[[k]] <- data.frame(
-#       class = factor(classes, levels = classes),
-#       tp = sapply(classes, function(cls) sum(truth_k == cls & pred_k == cls)),
-#       fp = sapply(classes, function(cls) sum(truth_k != cls & pred_k == cls)),
-#       fn = sapply(classes, function(cls) sum(truth_k == cls & pred_k != cls)),
-#       support = sapply(classes, function(cls) sum(truth_k == cls)),
-#       fold = k
-#     ) |>
-#       dplyr::mutate(
-#         precision = ifelse(.data$tp + .data$fp == 0, 0, .data$tp / (.data$tp + .data$fp)),
-#         recall    = ifelse(.data$tp + .data$fn == 0, 0, .data$tp / (.data$tp + .data$fn)),
-#         f1        = ifelse(.data$precision + .data$recall == 0, 0,
-#                            2 * .data$precision * .data$recall / (.data$precision + .data$recall))
-#       )
-#   }
-#
-#   overall_list <- Filter(Negate(is.null), overall_list)
-#   class_list <- Filter(Negate(is.null), class_list)
-#   cv_overall <- if (length(overall_list)) dplyr::bind_rows(overall_list) else NULL
-#   cv_class_metrics <- if (length(class_list)) dplyr::bind_rows(class_list) else NULL
-#
-#   # Aggregate CV predictions for summary metrics
-#   confusion_cv <- table(truth = all_truth, pred = all_pred)
-#   acc_cv <- mean(all_truth == all_pred, na.rm = TRUE)
-#   f1_cv <- if (any(is.na(all_pred))) NA_real_ else f1_macro(all_truth, all_pred)
-#
-#   metrics <- list(
-#     confusion_matrix = confusion_cv,
-#     accuracy = acc_cv,
-#     f1_macro = f1_cv,
-#     cv_overall = cv_overall
-#   )
-#
-#   # Train final model on all labelled data
-#   train_all <- labelled_df
-#   train_all$cell_id <- NULL
-#   final_model <- ranger::ranger(
-#     formula,
-#     data = train_all,
-#     num.trees = num.trees,
-#     mtry = mtry_val,
-#     num.threads = max(1, parallel::detectCores(logical = FALSE))
-#   )
-#
-#   list(
-#     model = final_model,
-#     metrics = metrics,
-#     test_pred = all_pred,
-#     test_truth = all_truth,
-#     cv_overall = cv_overall,
-#     cv_class_metrics = cv_class_metrics,
-#     features_used = present   # NEW: return what was actually used
-#   )
-# }
-# train_custom_randomforest <- function(spe,
-#                                       label_col = "cutoff_label",
-#                                       assay_name = "norm",
-#                                       unknown_label = "Unknown",
-#                                       num.trees = 200,
-#                                       mtry = NULL,
-#                                       seed = NULL,
-#                                       features = "all",
-#                                       cv_folds = 5,
-#                                       repeats = 10,
-#                                       agreement_thresh = 0.8) {
-#
-#   .assert_spe(spe)
-#
-#   # 1. Feature Selection Logic
-#   feat_mat_all <- SummarizedExperiment::assay(spe, assay_name)
-#
-#   if (is.character(features)) {
-#     if (length(features) == 1 && features == "all") {
-#       features_use <- rownames(feat_mat_all)
-#     } else {
-#       features_use <- intersect(features, rownames(feat_mat_all))
-#     }
-#   } else {
-#     stop("features must be 'all' or a character vector of markers.")
-#   }
-#
-#   if (length(features_use) < 1) stop("No valid features selected.")
-#
-#   # 2. Prepare Data
-#   lab_vec <- SummarizedExperiment::colData(spe)[[label_col]]
-#   feature_df <- as.data.frame(t(feat_mat_all[features_use, , drop = FALSE]))
-#   feature_df$original_label <- lab_vec
-#
-#   # Identify index of core cells (those not labeled Unknown)
-#   core_idx <- which(feature_df$original_label != unknown_label & !is.na(feature_df$original_label))
-#   if (length(core_idx) < 10) stop("Not enough core cells for CV cleaning.")
-#
-#   core_df <- feature_df[core_idx, ]
-#   core_df$original_label <- factor(core_df$original_label)
-#
-#   # 3. Repeated k-Fold CV for Label Cleaning
-#   if (!is.null(seed)) set.seed(seed)
-#   match_counts <- setNames(numeric(nrow(core_df)), rownames(core_df))
-#
-#   message(sprintf("Starting label cleaning: %d repeats of %d-fold CV...", repeats, cv_folds))
-#
-#   for (r in seq_len(repeats)) {
-#     message(sprintf("Repeat: %d",r))
-#     fold_assign <- integer(nrow(core_df))
-#     for (cls in levels(core_df$original_label)) {
-#       cls_idx <- which(core_df$original_label == cls)
-#       fold_assign[cls_idx] <- sample(rep(seq_len(cv_folds), length.out = length(cls_idx)))
-#     }
-#
-#     for (k in seq_len(cv_folds)) {
-#       train_idx <- which(fold_assign != k)
-#       test_idx  <- which(fold_assign == k)
-#
-#       temp_model <- ranger::ranger(
-#         original_label ~ .,
-#         data = core_df[train_idx, ],
-#         num.trees = 100,
-#         num.threads = max(1, parallel::detectCores(logical = FALSE))
-#       )
-#
-#       preds <- stats::predict(temp_model, core_df[test_idx, ])$predictions
-#       is_match <- (preds == core_df$original_label[test_idx])
-#       match_counts[test_idx] <- match_counts[test_idx] + as.numeric(is_match)
-#     }
-#   }
-#
-#   # 4. Filter Core Cells based on Consensus
-#   agreement_rate <- match_counts / repeats
-#   # Logic: Keep if agreement >= threshold
-#   valid_core_names <- names(agreement_rate)[agreement_rate >= agreement_thresh]
-#   inconsistent_names <- names(agreement_rate)[agreement_rate < agreement_thresh]
-#
-#   # Update labels in the SPE object
-#   cleaned_labels <- lab_vec
-#   # Match by cell names (colnames of SPE)
-#   cleaned_labels[colnames(spe) %in% inconsistent_names] <- unknown_label
-#   SummarizedExperiment::colData(spe)$cleaned_core_label <- cleaned_labels
-#
-#   message(sprintf("Cleaning complete. Removed %d inconsistent core cells.",
-#                   length(inconsistent_names)))
-#
-#   # 5. Final Model Training on Cleaned Set
-#   final_train_df <- core_df[valid_core_names, ]
-#
-#   # Handle mtry default if NULL
-#   mtry_val <- if (is.null(mtry)) floor(sqrt(length(features_use))) else mtry
-#
-#   final_model <- ranger::ranger(
-#     original_label ~ .,
-#     data = final_train_df,
-#     num.trees = num.trees,
-#     mtry = mtry_val,probability = TRUE,
-#     num.threads = max(1, parallel::detectCores(logical = FALSE))
-#   )
-#
-#   # 6. Reporting and Return
-#   return(list(
-#     spe = spe,
-#     model = final_model,
-#     features_used = features_use,
-#     agreement_rates = agreement_rate,
-#     cleaned_core_names = valid_core_names
-#   ))
-# }
-
 train_custom_randomforest <- function(spe,
                                       label_col = "cutoff_label",
                                       assay_name = "norm",
@@ -515,13 +213,10 @@ train_custom_randomforest <- function(spe,
                                       cv_folds = 5,
                                       repeats = 10,
                                       agreement_thresh = 0.8,
-                                      # parallel = TRUE,
-                                      num_threads=2) {
+                                      num_threads = 2) {
 
   if (!is.null(seed)) set.seed(seed)
   .assert_spe(spe)
-
-  # num_threads <- if (parallel) max(1, parallel::detectCores(logical = FALSE)) else 1
 
   # 1. Feature Prep
   feat_mat_all <- SummarizedExperiment::assay(spe, assay_name)
@@ -530,119 +225,78 @@ train_custom_randomforest <- function(spe,
   lab_vec <- SummarizedExperiment::colData(spe)[[label_col]]
   feature_df <- as.data.frame(t(feat_mat_all[features_use, , drop = FALSE]))
 
-  # Filter only labelled cells for training/cleaning
+  # Filter only labelled cells for training
   core_idx <- which(lab_vec != unknown_label & !is.na(lab_vec))
   core_df <- feature_df[core_idx, ]
   core_df$original_label <- factor(lab_vec[core_idx])
 
-  # --- HELPER: F1 MACRO ---
-  f1_macro <- function(truth, pred) {
-    classes <- levels(truth)
-    f1s <- sapply(classes, function(cls) {
-      tp <- sum(truth == cls & pred == cls)
-      fp <- sum(truth != cls & pred == cls)
-      fn <- sum(truth == cls & pred != cls)
-      prec <- if(tp + fp == 0) 0 else tp / (tp + fp)
-      rec  <- if(tp + fn == 0) 0 else tp / (tp + fn)
-      if(prec + rec == 0) 0 else 2 * (prec * rec) / (prec + rec)
-    })
-    return(f1s) # Returns vector for all classes
-  }
+  class_levels <- levels(core_df$original_label)
+  sum_prob_mat <- matrix(0, nrow = nrow(core_df), ncol = length(class_levels),
+                         dimnames = list(rownames(core_df), class_levels))
 
-  # --- STAGE 1: CONSENSUS CLEANING LOOP ---
-  message(sprintf("Stage 1: Cleaning labels via %d repeats...", repeats))
+  # --- STAGE 1: CONSENSUS CLEANING & PROBABILITY GENERATION ---
+  message(sprintf("Processing %d core cells via %d repeated CV folds...", nrow(core_df), repeats))
   match_counts <- setNames(numeric(nrow(core_df)), rownames(core_df))
 
   for (r in seq_len(repeats)) {
     fold_assign <- integer(nrow(core_df))
-    for (cls in levels(core_df$original_label)) {
+    for (cls in class_levels) {
       cls_idx <- which(core_df$original_label == cls)
       fold_assign[cls_idx] <- sample(rep(seq_len(cv_folds), length.out = length(cls_idx)))
     }
+
     for (k in seq_len(cv_folds)) {
       train_idx <- which(fold_assign != k); test_idx <- which(fold_assign == k)
-      tmp <- ranger::ranger(original_label ~ ., data = core_df[train_idx, ], num.trees = 100, num.threads = num_threads)
-      preds <- stats::predict(tmp, core_df[test_idx, ])$predictions
+
+      # Probability = TRUE is the key for uncertainty mapping
+      tmp <- ranger::ranger(original_label ~ .,
+                            data = core_df[train_idx, ],
+                            num.trees = 100,
+                            num.threads = num_threads,
+                            probability = TRUE)
+
+      prob_preds <- stats::predict(tmp, core_df[test_idx, ])$predictions
+      sum_prob_mat[test_idx, ] <- sum_prob_mat[test_idx, ] + prob_preds
+
+      # Determine hard labels for agreement counting
+      preds <- class_levels[max.col(prob_preds)]
       match_counts[test_idx] <- match_counts[test_idx] + as.numeric(preds == core_df$original_label[test_idx])
     }
   }
 
+  # 2. Consensus Calculations
+  avg_core_prob_mat <- sum_prob_mat / repeats
   agreement_rate <- match_counts / repeats
+
+  # Consensus predictions (the type the CV models consistently chose)
+  consensus_labels <- class_levels[max.col(avg_core_prob_mat)]
+  consensus_labels <- factor(consensus_labels, levels = class_levels)
+
+  # 3. Cleaning
   valid_names <- names(agreement_rate)[agreement_rate >= agreement_thresh]
   cleaned_df <- core_df[valid_names, ]
 
-  # --- STAGE 2: EVALUATION LOOP (On Cleaned Data Only) ---
-  message("Stage 2: Evaluating final model performance on cleaned cells...")
-  eval_preds <- factor(rep(NA_character_, nrow(cleaned_df)), levels = levels(cleaned_df$original_label))
-  eval_fold_assign <- integer(nrow(cleaned_df))
-  for (cls in levels(cleaned_df$original_label)) {
-    cls_idx <- which(cleaned_df$original_label == cls)
-    eval_fold_assign[cls_idx] <- sample(rep(seq_len(cv_folds), length.out = length(cls_idx)))
-  }
+  # Update SPE with cleaned labels
+  new_labels <- lab_vec
+  new_labels[colnames(spe) %in% names(agreement_rate[agreement_rate < agreement_thresh])] <- unknown_label
+  SummarizedExperiment::colData(spe)$cleaned_core_label <- new_labels
 
-  overall_list <- list()
-  class_metric_list <- list()
-
-  for (k in seq_len(cv_folds)) {
-    train_idx <- which(eval_fold_assign != k); test_idx <- which(eval_fold_assign == k)
-    eval_mod <- ranger::ranger(original_label ~ ., data = cleaned_df[train_idx, ], num.trees = num.trees, num.threads = num_threads)
-    pk <- stats::predict(eval_mod, cleaned_df[test_idx, ])$predictions
-    pk <- factor(pk, levels = levels(cleaned_df$original_label))
-    tk <- cleaned_df$original_label[test_idx]
-
-    eval_preds[test_idx] <- pk
-
-    # Calculate Overall Fold Metrics
-    f1_vec <- f1_macro(tk, pk)
-    overall_list[[k]] <- data.frame(fold = k, accuracy = mean(pk == tk), f1_macro = mean(f1_vec))
-
-    # Calculate Per-Class Metrics for this fold
-    classes <- levels(cleaned_df$original_label)
-    class_metric_list[[k]] <- data.frame(
-      class = classes,
-      fold = k,
-      precision = sapply(classes, function(c) {
-        tp <- sum(tk==c & pk==c); fp <- sum(tk!=c & pk==c)
-        if(tp+fp==0) 0 else tp/(tp+fp)
-      }),
-      recall = sapply(classes, function(c) {
-        tp <- sum(tk==c & pk==c); fn <- sum(tk==c & pk!=c)
-        if(tp+fn==0) 0 else tp/(tp+fn)
-      }),
-      f1 = f1_vec
-    )
-  }
-
-  # --- FINAL MODEL TRAINING ---
+  # 4. Final Model Training (On Cleaned Data Only)
+  message(sprintf("Training final model on %d cleaned cells...", nrow(cleaned_df)))
   mtry_val <- if (is.null(mtry)) floor(sqrt(length(features_use))) else mtry
   final_model <- ranger::ranger(original_label ~ ., data = cleaned_df,
                                 num.trees = num.trees, mtry = mtry_val,
                                 probability = TRUE, num.threads = num_threads)
 
-  # Update SPE colData
-  new_labels <- lab_vec
-  new_labels[colnames(spe) %in% names(agreement_rate[agreement_rate < agreement_thresh])] <- unknown_label
-  SummarizedExperiment::colData(spe)$cleaned_core_label <- new_labels
-
-  # --- RETURN LIST (Matches your old output structure) ---
+  # --- RETURN RESULTS ---
   return(list(
     spe = spe,
     model = final_model,
+    core_prob_mat = avg_core_prob_mat,
     agreement_rates = agreement_rate,
-    features_used = features_use,
-    metrics = list(
-      confusion_matrix = table(truth = cleaned_df$original_label, pred = eval_preds),
-      accuracy = mean(cleaned_df$original_label == eval_preds),
-      f1_macro = mean(f1_macro(cleaned_df$original_label, eval_preds)),
-      cv_overall = dplyr::bind_rows(overall_list),
-      cv_class_metrics = dplyr::bind_rows(class_metric_list)
-    ),
-    test_pred = eval_preds,
-    test_truth = cleaned_df$original_label
+    features_used = features_use
   ))
 }
-
-
 
 
 
@@ -836,44 +490,6 @@ label_agreement_rates <- function(spe,
 #' \code{unknown_label} are replaced in the output column.
 #'
 #' @export
-# predict_unknown_with_rf <- function(spe,
-#                                     model,
-#                                     assay_name = "norm",
-#                                     label_col = "custom_label",
-#                                     out_col = "soft_tree_label_filled",
-#                                     pred_col = "rf_pred",
-#                                     unknown_label = "Unknown") {
-#   .assert_spe(spe)
-#   if (!inherits(model, "ranger")) stop("model must be a ranger object.")
-#   if (!label_col %in% colnames(SummarizedExperiment::colData(spe))) {
-#     stop("label_col not found in colData(spe).")
-#   }
-#   if (!assay_name %in% SummarizedExperiment::assayNames(spe)) {
-#     stop(paste0("Assay '", assay_name, "' not found in spe."))
-#   }
-#
-#   feat_mat <- SummarizedExperiment::assay(spe, assay_name)
-#   feature_df <- as.data.frame(t(feat_mat))
-#
-#   # Align feature columns with the model's expected variables
-#   expected <- model$forest$independent.variable.names
-#   missing_cols <- setdiff(expected, names(feature_df))
-#   if (length(missing_cols) > 0) {
-#     stop("Missing feature columns required by model: ", paste(missing_cols, collapse = ", "))
-#   }
-#   feature_df <- feature_df[, expected, drop = FALSE]
-#
-#   preds <- stats::predict(model, feature_df)$predictions
-#
-#   labels <- SummarizedExperiment::colData(spe)[[label_col]]
-#   filled <- labels
-#   replace_idx <- is.na(labels) | labels == unknown_label
-#   filled[replace_idx] <- as.character(preds)[replace_idx]
-#
-#   SummarizedExperiment::colData(spe)[[pred_col]] <- preds
-#   SummarizedExperiment::colData(spe)[[out_col]] <- filled
-#   spe
-# }
 predict_unknown_with_randomforest <- function(spe,
                                               model,
                                               assay_name = "norm",
@@ -926,7 +542,7 @@ predict_unknown_with_randomforest <- function(spe,
   # Optional: store the max probability for QC
   SummarizedExperiment::colData(spe)$rf_confidence <- max_probs
 
-  return(spe)
+  return(list(spe = spe, prob_mat = prob_mat))
 }
 
 
@@ -1207,9 +823,10 @@ train_custom_knn <- function(spe,
                              cv_folds = 5,
                              repeats = 10,
                              agreement_thresh = 0.8,
+                             k = 5,
+                             method = "pearson",
                              seed = NULL) {
 
-  if (!requireNamespace("class", quietly = TRUE)) stop("Please install 'class' package.")
   if (!is.null(seed)) set.seed(seed)
   .assert_spe(spe)
 
@@ -1221,59 +838,75 @@ train_custom_knn <- function(spe,
   feature_df <- as.data.frame(t(feat_mat[features_use, , drop = FALSE]))
 
   core_idx <- which(lab_vec != unknown_label & !is.na(lab_vec))
-  if (length(core_idx) < 10) stop("Not enough core cells for CV cleaning.")
-
   core_df <- feature_df[core_idx, ]
   core_labels <- factor(lab_vec[core_idx])
 
-  # --- STAGE 1: CONSENSUS CLEANING ---
-  message(sprintf("Starting kNN label cleaning: %d repeats...", repeats))
+  class_levels <- levels(core_labels)
+  # Accumulate probability matrices across repeats
+  sum_prob_mat <- matrix(0, nrow = nrow(core_df), ncol = length(class_levels),
+                         dimnames = list(rownames(core_df), class_levels))
+
+  # --- STAGE 1: WEIGHTED CONSENSUS CLEANING ---
+  message(sprintf("Starting Weighted kNN (%s) cleaning: %d repeats...", method, repeats))
   match_counts <- setNames(numeric(nrow(core_df)), rownames(core_df))
 
   for (r in seq_len(repeats)) {
-    # Stratified fold assignment
     fold_assign <- integer(nrow(core_df))
-    for (cls in levels(core_labels)) {
+    for (cls in class_levels) {
       cls_idx <- which(core_labels == cls)
       fold_assign[cls_idx] <- sample(rep(seq_len(cv_folds), length.out = length(cls_idx)))
     }
 
-    for (k in seq_len(cv_folds)) {
-      train_idx <- which(fold_assign != k); test_idx <- which(fold_assign == k)
+    for (k_fold in seq_len(cv_folds)) {
+      train_idx <- which(fold_assign != k_fold)
+      test_idx <- which(fold_assign == k_fold)
 
-      preds <- class::knn(train = core_df[train_idx, ],
-                          test = core_df[test_idx, ],
-                          cl = core_labels[train_idx], k = 5)
+      # Use your wkNN logic to get probabilities for the test fold
+      # We call your internal logic here
+      res_wkNN <- predict_wknn_multi(
+        train_data = core_df[train_idx, ],
+        test_data = core_df[test_idx, ],
+        train_labels = core_labels[train_idx],
+        k = k,
+        method = method,
+        return_matrix = TRUE
+      )
 
-      match_counts[test_idx] <- match_counts[test_idx] + as.numeric(preds == core_labels[test_idx])
+      # Accumulate the weighted probability matrix
+      sum_prob_mat[test_idx, ] <- sum_prob_mat[test_idx, ] + res_wkNN$prob_matrix
+
+      # Track hard-label matches for cleaning
+      match_counts[test_idx] <- match_counts[test_idx] + as.numeric(res_wkNN$labels == core_labels[test_idx])
     }
   }
 
+  # Average the probabilities across all repeats
+  avg_core_prob_mat <- sum_prob_mat / repeats
   agreement_rate <- match_counts / repeats
 
-  # 2. Update labels in the SPE object (Matches your RF Logic)
+  # 2. Update Labels
   inconsistent_names <- names(agreement_rate)[agreement_rate < agreement_thresh]
   valid_core_names <- names(agreement_rate)[agreement_rate >= agreement_thresh]
 
   cleaned_labels <- lab_vec
-  # Match by cell names to ensure accuracy
   cleaned_labels[colnames(spe) %in% inconsistent_names] <- unknown_label
   SummarizedExperiment::colData(spe)$cleaned_core_label <- cleaned_labels
+  valid_core_idx <- which(rownames(core_df) %in% valid_core_names)
 
-  message(sprintf("Cleaning complete. Removed %d inconsistent core cells.", length(inconsistent_names)))
-
-  # 3. Return List (Structure matches train_custom_randomForest)
   return(list(
-    spe = spe,                                      # Now includes the new column
-    reference_data = core_df[valid_core_names, ],    # The "Golden Set" for prediction
-    reference_labels = core_labels[rownames(core_df) %in% valid_core_names],
-    features_used = features_use,
+    spe = spe,
+    model = list(
+      type = "wknn",
+      reference_data   = core_df[valid_core_idx, ],
+      reference_labels = factor(core_labels[valid_core_idx], levels = class_levels),
+      params = list(k = k, method = method)
+    ),
+    core_prob_mat  = avg_core_prob_mat,
     agreement_rates = agreement_rate,
-    cleaned_core_names = valid_core_names
+    features_used  = features_use
   ))
+
 }
-
-
 
 #' Predict Unknown Cells using kNN Reference
 #'
@@ -1317,7 +950,8 @@ predict_unknown_with_knn <- function(spe,
                                      unknown_label = "Unknown",
                                      unassigned_label = "Unassigned",
                                      threshold = 0.6,
-                                     k = 5) {
+                                     k = 5,
+                                     dist_method = "pearson") {
 
   # 1. Feature Prep
   feat_mat <- SummarizedExperiment::assay(spe, assay_name)
@@ -1325,14 +959,27 @@ predict_unknown_with_knn <- function(spe,
 
   # 2. Get Probabilities (scClassify style)
   # 'prob = TRUE' returns the proportion of the winning class votes as an attribute
-  knn_res <- class::knn(train = knn_ref$reference_data,
-                        test = feature_df,
-                        cl = knn_ref$reference_labels,
-                        k = k,
-                        prob = TRUE)
+  # knn_res <- class::knn(train = knn_ref$reference_data,
+  #                       test = feature_df,
+  #                       cl = knn_ref$reference_labels,
+  #                       k = k,
+  #                       prob = TRUE)
 
-  raw_preds <- as.character(knn_res)
-  confidences <- attr(knn_res, "prob")
+  knn_res <- predict_wknn_multi(
+    train_data = knn_ref$model$reference_data,
+    test_data = feature_df,
+    train_labels = knn_ref$model$reference_labels,
+    k = k,
+    method = dist_method,
+    return_matrix = TRUE # Added parameter
+  )
+
+  # raw_preds <- as.character(knn_res)
+  # confidences <- attr(knn_res, "prob")
+
+  raw_preds <- knn_res$labels
+  confidences <- knn_res$probs
+  prob_mat <- knn_res$prob_matrix # The new Likelihood Matrix
 
   # 3. Apply Confidence Thresholding
   # If the % of neighbor votes < threshold, label as 'Unassigned'
@@ -1362,7 +1009,7 @@ predict_unknown_with_knn <- function(spe,
   SummarizedExperiment::colData(spe)[[out_col]] <- filled
   SummarizedExperiment::colData(spe)$knn_confidence <- confidences
 
-  return(spe)
+  return(list(spe = spe, prob_mat = prob_mat))
 }
 
 
@@ -1386,7 +1033,8 @@ predict_wknn_multi <- function(train_data,
                                test_data,
                                train_labels,
                                k = 5,
-                               method = "pearson") {
+                               method = "pearson",
+                               return_matrix = FALSE) {
 
   # Ensure data is matrix format for fast calculation
   train_mat <- t(as.matrix(train_data))
@@ -1446,22 +1094,31 @@ predict_wknn_multi <- function(train_data,
     label_sums <- tapply(weights, top_labels, sum)
     label_sums[is.na(label_sums)] <- 0
 
+    all_classes <- levels(train_labels)
+    prob_dist <- setNames(numeric(length(all_classes)), all_classes)
+    prob_dist[names(label_sums)] <- label_sums / (sum(weights) + 1e-10)
+
     best_label <- names(sort(label_sums, decreasing = TRUE))[1]
 
     # Probability is the winning weight sum divided by total weight sum
     prob <- max(label_sums) / sum(weights)
 
-    return(list(label = best_label, prob = prob))
+    return(list(label = best_label, prob = prob, dist=prob_dist))
   })
 
   # Format output as a clean list
-  return(list(
+  out <- list(
     labels = sapply(results, `[[`, "label"),
-    probs = sapply(results, `[[`, "prob")
-  ))
+    probs  = sapply(results, `[[`, "prob")
+  )
+
+  # Only build and add the matrix if requested (saves memory)
+  if(return_matrix) {
+    out$prob_matrix <- do.call(rbind, lapply(results, `[[`, "dist"))
+  }
+
+  return(out)
 }
-
-
 
 
 #' Recursive Hierarchical kNN with BiocParallel Ensemble
@@ -1481,101 +1138,150 @@ predict_wknn_multi <- function(train_data,
 predict_hierarchical_knn_recursive <- function(spe,
                                                hier_ref,
                                                hc_tree,
-                                               assay_name = "exprs",
-                                               threshold = 0.7,
+                                               assay_name   = "exprs",
+                                               threshold    = 0.7,
                                                agreement_threshold = 0.8,
-                                               k = 5,
-                                               repeats = 5,
+                                               k            = 5,
+                                               repeats      = 5,
                                                dist_methods = c("pearson", "cosine"),
-                                               BPPARAM = BiocParallel::SerialParam(),
-                                               out_col = "hier_label") {
+                                               BPPARAM      = BiocParallel::SerialParam(),
+                                               out_col      = "hier_label",
+                                               chunk_size   = 1000L) {   # <-- NEW
 
-  .assert_spe(spe)
-  n_cells <- ncol(spe)
-  feat_mat <- SummarizedExperiment::assay(spe, assay_name)
+  cytoGateR:::.assert_spe(spe)
+  n_cells    <- ncol(spe)
 
-  # Initialize results in parent scope
-  final_labels <- rep(NA_character_, n_cells)
-  root_node_idx <- nrow(hc_tree$merge)
+  # FIX 1: Materialise the full dense matrix ONCE here.
+  # Previously t(as.matrix(...)) was called inside process_node on every
+  # recursive visit, allocating a fresh dense copy each time.
+  feat_mat_dense <- t(as.matrix(SummarizedExperiment::assay(spe, assay_name)))
+  # feat_mat_dense is now (cells × markers); we subset rows per node, not columns.
 
-  # --- Internal Recursive Processor ---
+  final_labels   <- rep(NA_character_, n_cells)
+  root_node_idx  <- nrow(hc_tree$merge)
+  n_tasks        <- length(dist_methods) * repeats
+
   process_node <- function(node_idx, active_indices) {
-    if (length(active_indices) == 0) return()
+    if (length(active_indices) == 0L) return()
 
-    node_id <- paste0("Node_", node_idx)
-    ref <- hier_ref[[node_id]]
+    node_id  <- paste0("Node_", node_idx)
+    ref      <- hier_ref[[node_id]]
+    train_mat <- as.matrix(ref$train_data)   # cells × markers, already correct shape
 
-    # Subset features for this node (Cells x Markers)
-    test_data <- t(as.matrix(feat_mat[ref$markers, active_indices, drop = FALSE]))
-    train_data <- as.matrix(ref$train_data) # Already Cells x Markers
+    # FIX 2: Use integer indices instead of slicing train_mat here.
+    # The bootstrap slice happens lazily inside the worker (see below).
+    n_train <- nrow(train_mat)
 
-    # --- Ensemble Step ---
-    # Run multiple methods and bootstraps in parallel
-    task_grid <- expand.grid(method = dist_methods, r = seq_len(repeats), stringsAsFactors = FALSE)
+    # FIX 4: Build a plain integer task list; no expand.grid data.frame kept in RAM.
+    task_methods <- rep(dist_methods, each = repeats)  # length = n_tasks, just strings
 
-    ensemble_results <- BiocParallel::bplapply(seq_len(nrow(task_grid)), function(i) {
-      m <- task_grid$method[i]
-      # Bootstrap 80% of training data
-      boot_idx <- sample(seq_len(nrow(train_data)), size = floor(0.8 * nrow(train_data)))
+    # Accumulators for stream-reduce (FIX 3 – no cbind over all repeats at once)
+    vote_counts <- NULL   # will become (n_active × n_labels) integer matrix
+    prob_sums   <- NULL   # (n_active) numeric vector
+    n_done      <- 0L
 
-      # Use our multi-metric engine
-      predict_wknn_multi(
-        train_data = train_data[boot_idx, , drop = FALSE],
-        test_data = test_data,
-        train_labels = ref$train_labels[boot_idx],
-        k = k,
-        method = m
+    # ---- Process active cells in chunks (FIX 5) --------------------------------
+    chunks     <- split(active_indices,
+                        ceiling(seq_along(active_indices) / chunk_size))
+
+    for (chunk_cells in chunks) {
+      # FIX 1 (continued): subset rows of the pre-built dense matrix
+      test_chunk <- feat_mat_dense[chunk_cells, ref$markers, drop = FALSE]
+
+      # FIX 3 + FIX 4: stream-reduce — accumulate only vote tallies per chunk
+      chunk_vote_counts <- NULL
+      chunk_prob_sums   <- numeric(length(chunk_cells))
+
+      ensemble_out <- BiocParallel::bplapply(
+        seq_len(n_tasks),
+        function(i) {
+          m <- task_methods[i]
+
+          # FIX 2: bootstrap by index; slice inside the worker so each worker
+          # allocates only its own 80 % slice, not a copy visible to the parent.
+          boot_idx <- sample.int(n_train, size = floor(0.8 * n_train))
+
+          res <- cytoGateR:::predict_wknn_multi(
+            train_data   = train_mat[boot_idx, , drop = FALSE],
+            test_data    = test_chunk,
+            train_labels = ref$train_labels[boot_idx],
+            k            = k,
+            method       = m
+          )
+          # Return only the compact summary needed for consensus.
+          # The full (cells × k) distance matrix inside predict_wknn_multi
+          # is freed when the worker returns.
+          list(labels = res$labels, probs = res$probs)
+        },
+        BPPARAM = BPPARAM
       )
-    }, BPPARAM = BPPARAM)
 
-    # --- Consensus Gathering ---
-    all_votes <- do.call(cbind, lapply(ensemble_results, `[[`, "labels"))
-    all_probs <- do.call(cbind, lapply(ensemble_results, `[[`, "probs"))
+      # FIX 3: stream-reduce votes — never cbind the full matrix stack
+      all_labels <- vapply(ensemble_out, `[[`, character(length(chunk_cells)), "labels")
+      # all_labels is (n_chunk × n_tasks) — still allocates, but only for one chunk
 
-    # 1. Majority Vote
-    node_preds <- apply(all_votes, 1, function(x) {
-      tbl <- table(x)
-      names(sort(tbl, decreasing = TRUE))[1]
-    })
+      label_levels <- sort(unique(as.vector(all_labels)))
 
-    # 2. Agreement Score & Average Confidence
-    node_agreement <- rowSums(all_votes == node_preds) / ncol(all_votes)
-    node_avg_probs <- rowMeans(all_probs)
+      # Tally votes as an integer matrix (n_chunk × n_levels)
+      vote_mat <- vapply(label_levels, function(lv)
+        as.integer(rowSums(all_labels == lv)), integer(length(chunk_cells)))
 
-    # --- Gatekeeping ---
-    # Cell must pass BOTH the probability threshold and the ensemble agreement
-    uncertain_mask <- (node_avg_probs < threshold) | (node_agreement < agreement_threshold)
+      prob_vec <- rowMeans(
+        vapply(ensemble_out, `[[`, numeric(length(chunk_cells)), "probs"))
 
-    if (any(uncertain_mask)) {
-      final_labels[active_indices[uncertain_mask]] <<- paste0(node_id, "_unassigned")
-    }
+      # Merge this chunk's tallies into global accumulators
+      if (is.null(chunk_vote_counts)) {
+        chunk_vote_counts <- vote_mat
+        colnames(chunk_vote_counts) <- label_levels
+      }
+      # (If running across chunks sequentially the merge is trivial; leave as-is.)
+      chunk_prob_sums <- prob_vec
 
-    # --- Routing ---
-    certain_idx <- which(!uncertain_mask)
-    if (length(certain_idx) > 0) {
-      preds_certain <- node_preds[certain_idx]
-      indices_certain <- active_indices[certain_idx]
+      rm(ensemble_out, all_labels, vote_mat)  # release before next chunk
 
-      for (choice in c("Left", "Right")) {
-        group_idx <- indices_certain[preds_certain == choice]
-        if (length(group_idx) == 0) next
+      # ---- Consensus for this chunk -------------------------------------------
+      node_preds    <- label_levels[max.col(chunk_vote_counts)]
+      node_agreement <- apply(chunk_vote_counts, 1,
+                              function(r) max(r)) / n_tasks
+      node_avg_probs <- chunk_prob_sums
 
-        side_idx <- if(choice == "Left") 1 else 2
-        child_val <- hc_tree$merge[node_idx, side_idx]
+      uncertain_mask <- (node_avg_probs < threshold) |
+        (node_agreement < agreement_threshold)
 
-        if (child_val < 0) {
-          final_labels[group_idx] <<- hc_tree$labels[-child_val]
-        } else {
-          process_node(child_val, group_idx)
+      if (any(uncertain_mask)) {
+        final_labels[chunk_cells[uncertain_mask]] <<-
+          paste0(node_id, "_unassigned")
+      }
+
+      # ---- Routing for certain cells -------------------------------------------
+      certain_idx <- which(!uncertain_mask)
+      if (length(certain_idx) > 0L) {
+        preds_certain   <- node_preds[certain_idx]
+        indices_certain <- chunk_cells[certain_idx]
+
+        for (choice in c("Left", "Right")) {
+          group_idx <- indices_certain[preds_certain == choice]
+          if (length(group_idx) == 0L) next
+
+          side_idx  <- if (choice == "Left") 1L else 2L
+          child_val <- hc_tree$merge[node_idx, side_idx]
+
+          if (child_val < 0L) {
+            final_labels[group_idx] <<- hc_tree$labels[-child_val]
+          } else {
+            process_node(child_val, group_idx)
+          }
         }
       }
-    }
-  }
+    }   # end chunk loop
+  }   # end process_node
 
-  message(sprintf("Starting recursive ensemble classification for %d cells...", n_cells))
+  message(sprintf(
+    "Starting recursive ensemble classification for %d cells (chunk_size=%d)...",
+    n_cells, chunk_size))
+
   process_node(root_node_idx, seq_len(n_cells))
 
   SummarizedExperiment::colData(spe)[[out_col]] <- final_labels
   return(spe)
 }
-

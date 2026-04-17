@@ -15,18 +15,7 @@ run_soft_gating <- function(spe, lineage_table,
   .assert_spe(spe)
   .assert_lineage_table(lineage_table)
 
-  # filter markers to those present
-  # lineage_table2 <- lineage_table |>
-  #   dplyr::mutate(
-  #     pos_markers = lapply(pos_markers, function(v) intersect(unlist(v), rownames(spe))),
-  #     neg_markers = lapply(neg_markers, function(v) intersect(unlist(v), rownames(spe)))
-  #   ) |>
-  #   dplyr::filter(lengths(pos_markers) > 0)
-
   lineage_table2 <- .clean_lineage_table(lineage_table, spe)
-
-
-
 
   all_markers <- unique(unlist(c(lineage_table2$pos_markers, lineage_table2$neg_markers)))
 
@@ -176,23 +165,6 @@ run_tree_gating <- function(spe,
     tree
   }
 
-  # if (isTRUE(parallel)) {
-  #   if (is.null(workers)) {
-  #     workers <- max(1, parallel::detectCores() - 1)
-  #   }
-  #   oplan <- future::plan(future::multisession, workers = workers)
-  #   on.exit(future::plan(oplan), add = TRUE)
-  #
-  #   trees <- furrr::future_map(
-  #     seq_len(nrow(lineage_table)),
-  #     build_tree,
-  #     .options = furrr::furrr_options(seed = TRUE)
-  #   )
-  # } else {
-  #   trees <- lapply(seq_len(nrow(lineage_table)), build_tree)
-  # }
-
-
   if (workers > 1) {
     oplan <- future::plan(future::multisession, workers = workers)
     on.exit(future::plan(oplan), add = TRUE)
@@ -206,13 +178,6 @@ run_tree_gating <- function(spe,
   }
 
   trees <- setNames(trees, lineage_table$cell_type)
-
-  # prob_mat <- sapply(names(trees), function(ct) {
-  #   neg <- lineage_table$neg_markers[lineage_table$cell_type == ct][[1]] %||% character(0)
-  #   vapply(seq_len(ncol(expr_norm)), function(i) {
-  #     tree_prob(trees[[ct]], expr_norm, i, combine = "mean", neg_markers = neg)
-  #   }, numeric(1))
-  # })
 
   prob_mat <- sapply(names(trees), function(ct) {
     neg <- lineage_table$neg_markers[lineage_table$cell_type == ct][[1]] %||% character(0)

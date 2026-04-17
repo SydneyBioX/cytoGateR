@@ -87,3 +87,182 @@ calculate_f1 <- function(spe, ref_col = "ref_broad", pred_col = "pred_broad") {
 
   do.call(rbind, results)
 }
+
+
+
+
+
+
+#' Calculate Full Uncertainty Suite with Sample Grouping
+#'
+#' @param prob_mat The [Cells x Types] matrix from your kNN or randomforest
+#' @param spe The SpatialExperiment object.
+#' @param sample_col The column identifying different images/samples.
+#' @param k_spatial Neighbors for the spatial discordance check (default 15).
+#'   from training) to rbind with prob_mat before processing. Both must share
+#'   the same column names.
+#' @export
+calculate_uncertainty <- function(prob_mat,
+                                  spe,
+                                  sample_col = "sample_id",
+                                  k_spatial = 15) {
+
+
+
+  prob_mat <- as.matrix(prob_mat)
+
+  # Reorder rows to match SPE cell order
+  spe_cells <- colnames(spe)
+
+  missing <- setdiff(spe_cells, rownames(prob_mat))
+  extra   <- setdiff(rownames(prob_mat), spe_cells)
+
+  if (length(missing) > 0) {
+    warning(sprintf("%d cells in SPE are missing from prob_mat and will get NA uncertainty scores.", length(missing)))
+  }
+  if (length(extra) > 0) {
+    warning(sprintf("%d rows in prob_mat have no matching SPE cell and will be dropped.", length(extra)))
+  }
+
+  # Align to SPE order — cells missing from prob_mat become NA rows
+  common_cells  <- intersect(spe_cells, rownames(prob_mat))
+  prob_aligned  <- matrix(NA,
+                          nrow = length(spe_cells),
+                          ncol = ncol(prob_mat),
+                          dimnames = list(spe_cells, colnames(prob_mat)))
+  prob_aligned[common_cells, ] <- prob_mat[common_cells, ]
+  prob_mat <- prob_aligned
+
+  # --- 1. Information Theory Metrics (Sample-Independent) ---
+  n_types <- ncol(prob_mat)
+  labels  <- colnames(prob_mat)[max.col(prob_mat, ties.method = "first")]
+
+  # entropy <- -rowSums(prob_mat * log(prob_mat + 1e-10), na.rm = TRUE) / log(n_types)
+
+  log_prob <- matrix(0, nrow = nrow(prob_mat), ncol = ncol(prob_mat))
+  pos_mask <- prob_mat > 0
+  log_prob[pos_mask] <- log(prob_mat[pos_mask])
+  entropy <- -rowSums(prob_mat * log_prob, na.rm = TRUE) / log(n_types)
+
+
+  gini_raw  <- 1 - rowSums(prob_mat^2, na.rm = TRUE)
+  gini_norm <- gini_raw / (1 - 1/n_types)
+
+  sorted_probs <- t(apply(prob_mat, 1, sort, decreasing = TRUE))
+  margin_val   <- 1 - (sorted_probs[, 1] - sorted_probs[, 2])
+
+  # --- 2. Spatial Metrics (Sample-Aware) ---
+  samples        <- SummarizedExperiment::colData(spe)[[sample_col]]
+  unique_samples <- unique(samples)
+  spatial_discordance <- rep(NA, nrow(prob_mat))
+
+  for (s in unique_samples) {
+    idx <- which(samples == s)
+    if (length(idx) <= k_spatial) next
+
+    coords_subset <- SpatialExperiment::spatialCoords(spe)[idx, ]
+    knn_res       <- dbscan::kNN(coords_subset, k = k_spatial)
+    sample_labels <- labels[idx]
+
+    sample_discordance <- sapply(seq_len(length(idx)), function(i) {
+      neighbor_labels <- sample_labels[knn_res$id[i, ]]
+      sum(neighbor_labels != sample_labels[i]) / k_spatial
+    })
+    spatial_discordance[idx] <- sample_discordance
+  }
+
+  # --- 3. Combined Uncertainty Index ---
+  # combined_idx <- (0.3 * entropy) +
+  #   (0.3 * gini_norm) +
+  #   (0.2 * margin_val) +
+  #   (0.2 * spatial_discordance)
+
+  data.frame(
+    cell_id              = spe_cells,
+    entropy              = entropy,
+    gini_impurity        = gini_norm,
+    margin_uncertainty   = margin_val,
+    spatial_discordance  = spatial_discordance
+    # combined_uncertainty = combined_idx
+  )
+}
+
+
+
+
+
+#' Apply Protected Spatial Priors to kNN Probabilities
+#'
+#' @param spe SpatialExperiment object.
+#' @param prob_mat The full probability matrix [Cells x Types] from predict_unknown_with_knn.
+#' @param k_spatial Number of physical neighbors for the "Prior" (default 50).
+#' @param lambda The "Spatial Weight" (default 0.2).
+#' @param protect_threshold Confidence level above which spatial priors are ignored (default 0.85).
+#' @param out_col Column name for the new labels.
+#' @export
+calculate_spatial_prior_labels <- function(spe,
+                                           prob_mat,
+                                           k_spatial = 50,
+                                           lambda = 0.2,
+                                           protect_threshold = 0.85,
+                                           out_col = "knn_spatial_label") {
+
+  # 0. Alignment — reorder/subset prob_mat rows to match SPE cell order
+  prob_mat  <- as.matrix(prob_mat)
+  spe_cells <- colnames(spe)
+
+  missing <- setdiff(spe_cells, rownames(prob_mat))
+  extra   <- setdiff(rownames(prob_mat), spe_cells)
+
+  if (length(missing) > 0) {
+    warning(sprintf("%d cells in SPE are missing from prob_mat and will get NA labels.", length(missing)))
+  }
+  if (length(extra) > 0) {
+    warning(sprintf("%d rows in prob_mat have no matching SPE cell and will be dropped.", length(extra)))
+  }
+
+  common_cells <- intersect(spe_cells, rownames(prob_mat))
+  prob_aligned <- matrix(NA,
+                         nrow = length(spe_cells),
+                         ncol = ncol(prob_mat),
+                         dimnames = list(spe_cells, colnames(prob_mat)))
+  prob_aligned[common_cells, ] <- prob_mat[common_cells, ]
+  prob_mat <- prob_aligned
+
+  # 1. Setup metadata
+  coords     <- SpatialExperiment::spatialCoords(spe)
+  cell_types <- colnames(prob_mat)
+
+  # 2. Extract kNN Confidence (the max probability per row)
+  knn_confidence      <- apply(prob_mat, 1, max)
+  current_best_labels <- cell_types[max.col(prob_mat, ties.method = "first")]
+
+  # 3. Fast Spatial Neighbor Search
+  knn_spatial <- dbscan::kNN(coords, k = k_spatial)
+
+  message(sprintf("Integrating spatial context (Protecting cells > %s confidence)...", protect_threshold))
+
+  # 4. Apply Bayesian Update
+  spatial_results <- vapply(seq_len(nrow(prob_mat)), function(i) {
+    if (is.na(knn_confidence[i])) return(NA_character_)
+
+    if (knn_confidence[i] >= protect_threshold) {
+      return(current_best_labels[i])
+    }
+
+    neighbor_idx    <- knn_spatial$id[i, ]
+    neighbor_labels <- current_best_labels[neighbor_idx]
+
+    prior_counts <- table(factor(neighbor_labels, levels = cell_types))
+    prior_probs  <- as.numeric(prior_counts) / k_spatial
+
+    posterior <- prob_mat[i, ] * (prior_probs ^ lambda)
+    posterior[!is.finite(posterior)] <- 0
+
+    return(cell_types[which.max(posterior)])
+  }, character(1))
+
+  # 5. Store results — aligned to SPE cell order by construction
+  SummarizedExperiment::colData(spe)[[out_col]] <- spatial_results
+  return(spe)
+}

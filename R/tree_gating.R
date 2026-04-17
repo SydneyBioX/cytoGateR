@@ -1,3 +1,4 @@
+
 #' Fit a 2-component Gaussian mixture model
 #'
 #' @param x numeric vector
@@ -31,8 +32,6 @@ fit_gmm_2 <- function(x,
   }
   sig2 <- as.numeric(sig2)
   # --- FIX END ---
-
-
   pi <- as.numeric(gmm$parameters$pro)
 
   ord <- order(mu)
@@ -174,10 +173,10 @@ build_fullcoverage_tree <- function(expr_mat,
     acc <- max(mean(pred == target, na.rm = TRUE),
                mean((1 - pred) == target, na.rm = TRUE))
 
-    c(marker = m, sep = fit$sep_score, acc = acc, cutoff = cutoff, scale = scale)
+    data.frame(marker = m, sep = fit$sep_score, acc = acc, cutoff = cutoff, scale = scale)
   })
 
-  marker_stats <- as.data.frame(do.call(rbind, marker_stats))
+  marker_stats <- do.call(rbind, marker_stats)
   marker_stats$sep <- as.numeric(marker_stats$sep)
   marker_stats$acc <- as.numeric(marker_stats$acc)
   marker_stats$combo <- marker_stats$sep + 2 * (marker_stats$acc - 0.5)
@@ -290,8 +289,6 @@ collect_path_scores <- function(tree, expr_mat, cell_i) {
 #' returns 1 (no penalty).
 #'
 #' @export
-
-
 neg_penalty <- function(expr_mat, neg_markers, cell_i, marker_stats = NULL, neg_strength = 0.8) {
   neg_markers <- intersect(neg_markers, names(marker_stats))
   if (length(neg_markers) == 0) return(1)
@@ -311,17 +308,7 @@ neg_penalty <- function(expr_mat, neg_markers, cell_i, marker_stats = NULL, neg_
   return(max(min(penalty, 1), 0))
 }
 
-# neg_penalty <- function(expr_mat, neg_markers, cell_i) {
-#   neg_markers <- intersect(neg_markers, rownames(expr_mat))
-#   if (length(neg_markers) == 0) return(1)
-#
-#   x <- as.numeric(expr_mat[neg_markers, cell_i])
-#   x <- x[is.finite(x)]
-#   if (length(x) == 0) return(1)
-#
-#   p <- 1 - mean(x, na.rm = TRUE)
-#   max(min(p, 1), 0)
-# }
+
 
 #' Tree probability for one cell
 #'
