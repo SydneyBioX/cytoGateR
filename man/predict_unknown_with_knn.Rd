@@ -14,7 +14,8 @@ predict_unknown_with_knn(
   unknown_label = "Unknown",
   unassigned_label = "Unassigned",
   threshold = 0.6,
-  k = 5
+  k = 5,
+  dist_method = "pearson"
 )
 }
 \arguments{

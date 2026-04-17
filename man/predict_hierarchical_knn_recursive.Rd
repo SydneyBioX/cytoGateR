@@ -15,7 +15,8 @@ predict_hierarchical_knn_recursive(
   repeats = 5,
   dist_methods = c("pearson", "cosine"),
   BPPARAM = BiocParallel::SerialParam(),
-  out_col = "hier_label"
+  out_col = "hier_label",
+  chunk_size = 1000L
 )
 }
 \arguments{

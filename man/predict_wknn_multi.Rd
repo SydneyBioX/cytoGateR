@@ -9,7 +9,8 @@ predict_wknn_multi(
   test_data,
   train_labels,
   k = 5,
-  method = "pearson"
+  method = "pearson",
+  return_matrix = FALSE
 )
 }
 \arguments{

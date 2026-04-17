@@ -13,6 +13,8 @@ train_custom_knn(
   cv_folds = 5,
   repeats = 10,
   agreement_thresh = 0.8,
+  k = 5,
+  method = "pearson",
   seed = NULL
 )
 }
