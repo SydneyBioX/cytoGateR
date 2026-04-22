@@ -802,6 +802,9 @@ apply_cutoff_labels <- function(res,
 #'   \code{"cosine"}, or \code{"euclidean"}. Default is \code{"pearson"}.
 #' @param seed Optional integer for random seed to ensure reproducibility.
 #'   Default is \code{NULL}.
+#' @param chunk_size Integer number of test cells processed per block inside
+#'   weighted kNN calls. Smaller values reduce peak RAM with identical
+#'   predictions at the cost of runtime. Default is \code{250L}.
 #'
 #' @return A named list containing:
 #' \describe{
@@ -830,7 +833,8 @@ train_custom_knn <- function(spe,
                              agreement_thresh = 0.8,
                              k = 5,
                              method = "pearson",
-                             seed = NULL) {
+                             seed = NULL,
+                             chunk_size = 250L) {
 
   if (!is.null(seed)) set.seed(seed)
   .assert_spe(spe)
@@ -840,23 +844,23 @@ train_custom_knn <- function(spe,
   features_use <- if (length(features) == 1 && features == "all") rownames(feat_mat) else intersect(features, rownames(feat_mat))
 
   lab_vec <- SummarizedExperiment::colData(spe)[[label_col]]
-  feature_df <- as.data.frame(t(feat_mat[features_use, , drop = FALSE]))
+  feature_mat <- t(as.matrix(feat_mat[features_use, , drop = FALSE]))
 
   core_idx <- which(lab_vec != unknown_label & !is.na(lab_vec))
-  core_df <- feature_df[core_idx, ]
+  core_mat <- feature_mat[core_idx, , drop = FALSE]
   core_labels <- factor(lab_vec[core_idx])
 
   class_levels <- levels(core_labels)
   # Accumulate probability matrices across repeats
-  sum_prob_mat <- matrix(0, nrow = nrow(core_df), ncol = length(class_levels),
-                         dimnames = list(rownames(core_df), class_levels))
+  sum_prob_mat <- matrix(0, nrow = nrow(core_mat), ncol = length(class_levels),
+                         dimnames = list(rownames(core_mat), class_levels))
 
   # --- STAGE 1: WEIGHTED CONSENSUS CLEANING ---
-  message(sprintf("Starting Weighted kNN (%s) cleaning: %d repeats...", method, repeats))
-  match_counts <- setNames(numeric(nrow(core_df)), rownames(core_df))
+  message(sprintf("Starting Weighted kNN (%s) cleaning on %d cells: %d repeats...", method, nrow(core_mat), repeats))
+  match_counts <- setNames(numeric(nrow(core_mat)), rownames(core_mat))
 
   for (r in seq_len(repeats)) {
-    fold_assign <- integer(nrow(core_df))
+    fold_assign <- integer(nrow(core_mat))
     for (cls in class_levels) {
       cls_idx <- which(core_labels == cls)
       fold_assign[cls_idx] <- sample(rep(seq_len(cv_folds), length.out = length(cls_idx)))
@@ -869,12 +873,13 @@ train_custom_knn <- function(spe,
       # Use your wkNN logic to get probabilities for the test fold
       # We call your internal logic here
       res_wkNN <- predict_wknn_multi(
-        train_data = core_df[train_idx, ],
-        test_data = core_df[test_idx, ],
+        train_data = core_mat[train_idx, , drop = FALSE],
+        test_data = core_mat[test_idx, , drop = FALSE],
         train_labels = core_labels[train_idx],
         k = k,
         method = method,
-        return_matrix = TRUE
+        return_matrix = TRUE,
+        chunk_size = chunk_size
       )
 
       # Accumulate the weighted probability matrix
@@ -896,13 +901,13 @@ train_custom_knn <- function(spe,
   cleaned_labels <- lab_vec
   cleaned_labels[colnames(spe) %in% inconsistent_names] <- unknown_label
   SummarizedExperiment::colData(spe)$cleaned_core_label <- cleaned_labels
-  valid_core_idx <- which(rownames(core_df) %in% valid_core_names)
+  valid_core_idx <- which(rownames(core_mat) %in% valid_core_names)
 
   return(list(
     spe = spe,
     model = list(
       type = "wknn",
-      reference_data   = core_df[valid_core_idx, ],
+      reference_data   = as.data.frame(core_mat[valid_core_idx, , drop = FALSE]),
       reference_labels = factor(core_labels[valid_core_idx], levels = class_levels),
       params = list(k = k, method = method)
     ),
@@ -943,6 +948,9 @@ train_custom_knn <- function(spe,
 #' @param dist_method Character string specifying the distance metric used for
 #'   kNN similarity calculation (e.g., \code{"pearson"}, \code{"cosine"},
 #'   \code{"euclidean"}). Default is \code{"pearson"}.
+#' @param chunk_size Integer number of test cells processed per weighted kNN
+#'   block. Smaller values reduce peak RAM with identical predictions at the
+#'   cost of runtime. Default is \code{250L}.
 #'
 #' @return A \code{SpatialExperiment} object with two new columns added to
 #'   \code{colData}: \code{out_col} containing the final predicted labels and
@@ -959,11 +967,12 @@ predict_unknown_with_knn <- function(spe,
                                      unassigned_label = "Unassigned",
                                      threshold = 0.6,
                                      k = 5,
-                                     dist_method = "pearson") {
+                                     dist_method = "pearson",
+                                     chunk_size = 250L) {
 
   # 1. Feature Prep
   feat_mat <- SummarizedExperiment::assay(spe, assay_name)
-  feature_df <- as.data.frame(t(feat_mat[knn_ref$features_used, , drop = FALSE]))
+  feature_mat <- t(as.matrix(feat_mat[knn_ref$features_used, , drop = FALSE]))
 
   # 2. Get Probabilities (scClassify style)
   # 'prob = TRUE' returns the proportion of the winning class votes as an attribute
@@ -975,11 +984,12 @@ predict_unknown_with_knn <- function(spe,
 
   knn_res <- predict_wknn_multi(
     train_data = knn_ref$model$reference_data,
-    test_data = feature_df,
+    test_data = feature_mat,
     train_labels = knn_ref$model$reference_labels,
     k = k,
     method = dist_method,
-    return_matrix = TRUE # Added parameter
+    return_matrix = TRUE,
+    chunk_size = chunk_size
   )
 
   # raw_preds <- as.character(knn_res)
@@ -1038,6 +1048,9 @@ predict_unknown_with_knn <- function(spe,
 #' @param return_matrix Logical indicating whether to return the full probability
 #'   matrix for all classes. If \code{FALSE}, only the predicted labels and
 #'   associated probabilities are returned. Default is \code{FALSE}.
+#' @param chunk_size Optional integer number of test cells per block. If
+#'   \code{NULL}, all test cells are processed in a single block (legacy
+#'   behavior).
 #'
 #' @return A list containing predicted 'labels' and 'probs'.
 predict_wknn_multi <- function(train_data,
@@ -1045,11 +1058,14 @@ predict_wknn_multi <- function(train_data,
                                train_labels,
                                k = 5,
                                method = "pearson",
-                               return_matrix = FALSE) {
+                               return_matrix = FALSE,
+                               chunk_size = NULL) {
 
   # Ensure data is matrix format for fast calculation
   train_mat <- t(as.matrix(train_data))
   test_mat <- t(as.matrix(test_data))
+  n_test <- ncol(test_mat)
+  class_levels <- levels(train_labels)
 
   # Safety Check: Do the number of markers match?
   if (nrow(train_mat) != nrow(test_mat)) {
@@ -1058,74 +1074,134 @@ predict_wknn_multi <- function(train_data,
                  ncol(train_mat), ncol(test_mat)))
   }
 
-
-  # 1. Calculate the Similarity/Distance Matrix
-  if (method %in% c("pearson", "spearman")) {
-    # Correlation: higher is more similar
-    score_mat <- cor(test_mat, train_mat, method = method)
-    is_distance <- FALSE
-
-  } else if (method == "cosine") {
-    # Cosine Similarity: higher is more similar
-    # Normalize vectors to unit length then take dot product
-    # norm_train <- lsa::cosine(t(train_mat)) # Using lsa package or manual math:
-    # norm_train <- 1 - as.matrix(proxy::dist(t(test_mat), t(train_mat), method = "cosine"))
-    # Manual: (A . B) / (|A||B|)
-    cp <- crossprod(test_mat, train_mat)
-    rn <- sqrt(colSums(test_mat^2))
-    cn <- sqrt(colSums(train_mat^2))
-    score_mat <- cp / outer(rn, cn)
-    is_distance <- FALSE
-
-  } else if (method == "euclidean") {
-    # Euclidean: lower is more similar (distance)
-    score_mat <- as.matrix(proxy::dist(t(test_mat), t(train_mat), method = "Euclidean"))
-    is_distance <- TRUE
+  if (n_test == 0L) {
+    out <- list(labels = character(0), probs = numeric(0))
+    if (return_matrix) {
+      out$prob_matrix <- matrix(
+        numeric(0),
+        nrow = 0,
+        ncol = length(class_levels),
+        dimnames = list(character(0), class_levels)
+      )
+    }
+    return(out)
   }
 
-  # 2. Process each test cell to find neighbors
-  results <- apply(score_mat, 1, function(scores) {
+  if (is.null(chunk_size) || !is.finite(chunk_size) || as.integer(chunk_size) <= 0L) {
+    chunk_size <- n_test
+  } else {
+    chunk_size <- as.integer(chunk_size)
+  }
 
-    # Identify Top K
-    if (is_distance) {
-      top_k_idx <- order(scores, decreasing = FALSE)[1:k]
-      # Convert distance to a weight (Inverse distance)
-      # Add small epsilon to avoid division by zero
-      weights <- 1 / (scores[top_k_idx] + 1e-6)
+  # Keep cosine numerics identical to legacy behavior by evaluating in one block.
+  if (identical(method, "cosine")) {
+    chunk_size <- n_test
+  }
+
+  chunk_idx <- split(seq_len(n_test), ceiling(seq_len(n_test) / chunk_size))
+
+  out_labels <- character(n_test)
+  out_probs <- numeric(n_test)
+  if (!is.null(colnames(test_mat))) {
+    names(out_labels) <- colnames(test_mat)
+    names(out_probs) <- colnames(test_mat)
+  }
+
+  prob_matrix <- NULL
+  if (return_matrix) {
+    prob_matrix <- matrix(
+      0,
+      nrow = n_test,
+      ncol = length(class_levels),
+      dimnames = list(colnames(test_mat), class_levels)
+    )
+  }
+
+  for (idx in chunk_idx) {
+    test_chunk <- test_mat[, idx, drop = FALSE]
+
+    # 1. Calculate the Similarity/Distance Matrix for this chunk
+    if (method %in% c("pearson", "spearman")) {
+      # Correlation: higher is more similar
+      score_mat <- cor(test_chunk, train_mat, method = method)
+      is_distance <- FALSE
+
+    } else if (method == "cosine") {
+      # Cosine Similarity: higher is more similar
+      cp <- crossprod(test_chunk, train_mat)
+      rn <- sqrt(colSums(test_chunk^2))
+      cn <- sqrt(colSums(train_mat^2))
+      score_mat <- cp / outer(rn, cn)
+      is_distance <- FALSE
+
+    } else if (method == "euclidean") {
+      # Euclidean: lower is more similar (distance)
+      score_mat <- as.matrix(proxy::dist(t(test_chunk), t(train_mat), method = "Euclidean"))
+      is_distance <- TRUE
     } else {
-      top_k_idx <- order(scores, decreasing = TRUE)[1:k]
-      # Use raw similarity as weight (clipping negative correlations to 0)
-      weights <- pmax(scores[top_k_idx], 0)
+      stop("Unknown method: ", method)
     }
 
-    top_labels <- train_labels[top_k_idx]
+    # 2. Process each test cell in the chunk
+    for (i in seq_len(nrow(score_mat))) {
+      scores <- score_mat[i, ]
 
-    # 3. Weighted Voting
-    # Sum the weights for each unique label found in the neighbors
-    label_sums <- tapply(weights, top_labels, sum)
-    label_sums[is.na(label_sums)] <- 0
+      # Identify Top K
+      if (is_distance) {
+        top_k_idx <- order(scores, decreasing = FALSE)[1:k]
+        # Convert distance to a weight (Inverse distance)
+        # Add small epsilon to avoid division by zero
+        weights <- 1 / (scores[top_k_idx] + 1e-6)
+      } else {
+        top_k_idx <- order(scores, decreasing = TRUE)[1:k]
+        # Use raw similarity as weight (clipping negative correlations to 0)
+        weights <- pmax(scores[top_k_idx], 0)
+      }
 
-    all_classes <- levels(train_labels)
-    prob_dist <- setNames(numeric(length(all_classes)), all_classes)
-    prob_dist[names(label_sums)] <- label_sums / (sum(weights) + 1e-10)
+      top_labels <- train_labels[top_k_idx]
+      weights[!is.finite(weights)] <- 0
+      w_sum <- sum(weights)
+      if (!is.finite(w_sum) || w_sum <= 0) {
+        global_i <- idx[i]
+        out_labels[global_i] <- as.character(top_labels[1])
+        out_probs[global_i] <- 0
+        if (return_matrix) prob_matrix[global_i, ] <- 0
+        next
+      }
 
-    best_label <- names(sort(label_sums, decreasing = TRUE))[1]
+      # 3. Weighted Voting
+      # Sum the weights for each unique label found in the neighbors
+      label_sums <- tapply(weights, top_labels, sum)
+      label_sums[is.na(label_sums)] <- 0
 
-    # Probability is the winning weight sum divided by total weight sum
-    prob <- max(label_sums) / sum(weights)
+      best_label <- names(sort(label_sums, decreasing = TRUE))[1]
 
-    return(list(label = best_label, prob = prob, dist=prob_dist))
-  })
+      # Probability is the winning weight sum divided by total weight sum
+      prob <- max(label_sums) / w_sum
+
+      global_i <- idx[i]
+      out_labels[global_i] <- best_label
+      out_probs[global_i] <- prob
+
+      if (return_matrix) {
+        prob_dist <- setNames(numeric(length(class_levels)), class_levels)
+        prob_dist[names(label_sums)] <- label_sums / w_sum
+        prob_matrix[global_i, ] <- prob_dist
+      }
+    }
+
+    rm(test_chunk, score_mat)
+  }
 
   # Format output as a clean list
   out <- list(
-    labels = sapply(results, `[[`, "label"),
-    probs  = sapply(results, `[[`, "prob")
+    labels = out_labels,
+    probs  = out_probs
   )
 
   # Only build and add the matrix if requested (saves memory)
-  if(return_matrix) {
-    out$prob_matrix <- do.call(rbind, lapply(results, `[[`, "dist"))
+  if (return_matrix) {
+    out$prob_matrix <- prob_matrix
   }
 
   return(out)
@@ -1160,7 +1236,8 @@ predict_hierarchical_knn_recursive <- function(spe,
                                                dist_methods = c("pearson", "cosine"),
                                                BPPARAM      = BiocParallel::SerialParam(),
                                                out_col      = "hier_label",
-                                               chunk_size   = 1000L) {   # <-- NEW
+                                               chunk_size   = 1000L,
+                                               unassigned_label = "Unassigned") {   # <-- NEW
 
   .assert_spe(spe)
   n_cells    <- ncol(spe)
@@ -1259,12 +1336,13 @@ predict_hierarchical_knn_recursive <- function(spe,
                               function(r) max(r)) / n_tasks
       node_avg_probs <- chunk_prob_sums
 
-      uncertain_mask <- (node_avg_probs < threshold) |
-        (node_agreement < agreement_threshold)
+      uncertain_mask <- is.na(node_avg_probs) | is.na(node_agreement) |
+        (node_avg_probs < threshold) | (node_agreement < agreement_threshold)
 
-      if (any(uncertain_mask)) {
+      if (any(uncertain_mask, na.rm = TRUE)) {
         final_labels[chunk_cells[uncertain_mask]] <<-
-          paste0(node_id, "_unassigned")
+          # paste0(node_id, "_unassigned")
+          unassigned_label
       }
 
       # ---- Routing for certain cells -------------------------------------------

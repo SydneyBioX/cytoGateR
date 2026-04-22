@@ -141,6 +141,7 @@ run_tree_gating <- function(spe,
     pos <- lineage_table$pos_markers[[i]]
     neg <- lineage_table$neg_markers[[i]] %||% character(0)
     message(paste0("Building ", i, "th tree - ", ct, " Cell Type."))
+    gc1 <- gc(reset = TRUE)
     timing <- system.time(
       tree <- build_fullcoverage_tree(
         expr_norm,
@@ -153,15 +154,15 @@ run_tree_gating <- function(spe,
         gmm_model_names = gmm_model_names
       )
     )
-    message("Finished ",
-            ct,
-            ". Timing: ",
-            paste(
-              c("usr", "sys", "elap", "u.c", "s.c"),
-              round(timing, 2),
-              sep = ": ",
-              collapse = "; "
-            ))
+    gc2 <- gc()
+
+    peak_ram_gb <- sum(gc2[, 6] - gc1[, 6]) / 953.7
+    message(sprintf(
+      "finished %s | elapsed: %.3f s | peak RAM: %.2f GB",
+      paste0("tree ", i, " - ", ct),
+      as.numeric(timing[["elapsed"]]),
+      as.numeric(peak_ram_gb)
+    ))
     tree
   }
 

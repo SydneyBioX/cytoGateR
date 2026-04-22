@@ -12,13 +12,14 @@ build_hierarchical_reference <- function(spe,
                                          marker_stats = NULL,
                                          label_col = "cleaned_core_label",
                                          top_n = 5,
-                                         assay_name = "exprs") {
+                                         assay_name = "exprs",
+                                         unknown_label = "Unassigned") {
 
   .assert_spe(spe)
 
   # 1. Extract core data
   cd <- as.data.frame(SummarizedExperiment::colData(spe))
-  core_idx <- which(!is.na(cd[[label_col]]) & cd[[label_col]] != "Unknown")
+  core_idx <- which(!is.na(cd[[label_col]]) & cd[[label_col]] != unknown_label)
   core_spe <- spe[, core_idx]
 
   n_nodes <- nrow(hc_tree$merge)
