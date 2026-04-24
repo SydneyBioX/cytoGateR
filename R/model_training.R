@@ -1059,7 +1059,7 @@ predict_wknn_multi <- function(train_data,
                                k = 5,
                                method = "pearson",
                                return_matrix = FALSE,
-                               chunk_size = NULL) {
+                               chunk_size = 10000L) {
 
   # Ensure data is matrix format for fast calculation
   train_mat <- t(as.matrix(train_data))
