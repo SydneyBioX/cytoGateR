@@ -16,7 +16,8 @@ predict_hierarchical_knn_recursive(
   dist_methods = c("pearson", "cosine"),
   BPPARAM = BiocParallel::SerialParam(),
   out_col = "hier_label",
-  chunk_size = 1000L
+  chunk_size = 1000L,
+  unassigned_label = "Unassigned"
 )
 }
 \arguments{
@@ -45,6 +46,8 @@ predict_hierarchical_knn_recursive(
 \item{chunk_size}{Integer specifying the number of cells processed per chunk
 during prediction. Increasing this value may improve speed but requires
 more memory. Default is \code{1000L}}
+
+\item{unassigned_label}{character label for Unassigned cells (default "Unassigned")}
 }
 \description{
 Recursive Hierarchical kNN with BiocParallel Ensemble

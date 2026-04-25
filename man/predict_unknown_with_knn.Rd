@@ -2,7 +2,7 @@
 % Please edit documentation in R/model_training.R
 \name{predict_unknown_with_knn}
 \alias{predict_unknown_with_knn}
-\title{Predict Unknown Cells using kNN Reference}
+\title{Predict and fill unknown labels using a weighted kNN model}
 \usage{
 predict_unknown_with_knn(
   spe,
@@ -15,52 +15,40 @@ predict_unknown_with_knn(
   unassigned_label = "Unassigned",
   threshold = 0.6,
   k = 5,
-  dist_method = "pearson"
+  dist_method = "pearson",
+  chunk_size = 10000L
 )
 }
 \arguments{
-\item{spe}{A \code{SpatialExperiment} object containing cell data.}
+\item{spe}{A SpatialExperiment or SingleCellExperiment object.}
 
-\item{knn_ref}{Output from \code{train_custom_knn()}, containing the trained
-kNN model and reference data.}
+\item{knn_ref}{A list containing the reference data, labels, and features (from train_custom_knn).}
 
-\item{assay_name}{Character string specifying the assay to use for marker
-expression. Default is \code{"norm"}.}
+\item{assay_name}{Name of the assay to use for features (default "norm").}
 
-\item{label_col}{Character string specifying the column in \code{colData(spe)}
-containing the initial cell type labels. Default is \code{"cutoff_label"}.}
+\item{label_col}{The original label column containing "Unknown" cells.}
 
-\item{out_col}{Character string specifying the name of the output column added
-to \code{colData(spe)} containing the final filled labels. Default is
-\code{"knn_label_filled"}.}
+\item{out_col}{Output column name for filled labels.}
 
-\item{pred_col}{Character string specifying the name of the output column added
-to \code{colData(spe)} containing the raw kNN predictions. Default is
-\code{"knn_pred"}.}
+\item{pred_col}{Column name for raw kNN predictions.}
 
-\item{unknown_label}{Character string specifying the label used to identify
-unknown cells. Default is \code{"Unknown"}.}
+\item{unknown_label}{String identifying missing labels (default "Unknown").}
 
-\item{unassigned_label}{Character string specifying the label used to identify
-unassigned cells. Default is \code{"Unassigned"}.}
+\item{unassigned_label}{Label for cells below the confidence threshold.}
 
-\item{threshold}{Numeric value between 0 and 1 specifying the minimum
-proportion of neighbours required to agree on a label for a prediction to
-be accepted. Default is \code{0.6}.}
+\item{threshold}{Minimum vote proportion (0-1) to accept a label (default 0.6).}
 
-\item{k}{Integer specifying the number of nearest neighbours to use for
-prediction. Default is \code{5}.}
+\item{k}{Number of neighbors.}
 
-\item{dist_method}{Character string specifying the distance metric used for
-kNN similarity calculation (e.g., \code{"pearson"}, \code{"cosine"},
-\code{"euclidean"}). Default is \code{"pearson"}.}
+\item{dist_method}{Distance metric ("pearson", "cosine", etc.).}
+
+\item{chunk_size}{Number of cells to process per chunk for memory management.}
 }
 \value{
-A \code{SpatialExperiment} object with two new columns added to
-  \code{colData}: \code{out_col} containing the final predicted labels and
-  \code{pred_col} containing the raw kNN predictions.
+A list containing the updated \code{spe} and the \code{prob_mat} (unknowns only).
 }
 \description{
-Uses a trained kNN model to predict cell types for cells labelled as Unknown
-or Unassigned, based on marker expression from a specified assay.
+This function takes a SpatialExperiment object and a trained kNN reference
+to predict labels for "Unknown" or NA cells. It returns the updated SPE
+and a probability matrix for the predicted cells only.
 }

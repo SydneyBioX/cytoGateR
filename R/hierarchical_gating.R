@@ -6,6 +6,7 @@
 #' @param label_col Column with core labels (e.g., "cleaned_core_label").
 #' @param top_n Number of top DE markers to use per node. Set to NULL to use all markers.
 #' @param assay_name Assay to use (default "exprs").
+#' @param unknown_label haracter label for Unassigned cells (default "Unassigned").
 #' @export
 build_hierarchical_reference <- function(spe,
                                          hc_tree,

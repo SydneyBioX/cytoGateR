@@ -10,7 +10,8 @@ build_hierarchical_reference(
   marker_stats = NULL,
   label_col = "cleaned_core_label",
   top_n = 5,
-  assay_name = "exprs"
+  assay_name = "exprs",
+  unknown_label = "Unassigned"
 )
 }
 \arguments{
@@ -25,6 +26,8 @@ build_hierarchical_reference(
 \item{top_n}{Number of top DE markers to use per node. Set to NULL to use all markers.}
 
 \item{assay_name}{Assay to use (default "exprs").}
+
+\item{unknown_label}{haracter label for Unassigned cells (default "Unassigned").}
 }
 \description{
 Build Hierarchical Reference with Flexible Marker Selection

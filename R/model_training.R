@@ -292,8 +292,8 @@ train_custom_randomforest <- function(spe,
   return(list(
     spe = spe,
     model = final_model,
-    core_prob_mat = avg_core_prob_mat,
-    agreement_rates = agreement_rate,
+    core_prob_mat = avg_core_prob_mat[valid_names, , drop = FALSE],
+    agreement_rates = agreement_rate[valid_names],
     features_used = features_use
   ))
 }
@@ -497,54 +497,66 @@ predict_unknown_with_randomforest <- function(spe,
                                               out_col = "soft_tree_label_filled",
                                               pred_col = "rf_pred",
                                               unknown_label = "Unknown",
-                                              threshold = 0.5,           # New: Confidence threshold
-                                              unassigned_label = "Unassigned") { # New: Label for low confidence
+                                              threshold = 0.5,
+                                              unassigned_label = "Unassigned") {
   .assert_spe(spe)
   if (!inherits(model, "ranger")) stop("model must be a ranger object.")
 
-  # Ranger must be trained with probability = TRUE for thresholding to work
+  # 1. Identify Target Cells
+  labels <- SummarizedExperiment::colData(spe)[[label_col]]
+  replace_idx <- is.na(labels) | labels == unknown_label
+
+  if (sum(replace_idx) == 0) {
+    message("No unknown cells found to predict.")
+    return(list(spe = spe, prob_mat = NULL))
+  }
+
+  # 2. Prepare Features ONLY for Unknown Cells
+  feat_mat <- SummarizedExperiment::assay(spe, assay_name)
+  # Subset columns (cells) first, then transpose
+  feature_df <- as.data.frame(t(feat_mat[, replace_idx, drop = FALSE]))
+
+  # Align features to model training
+  expected <- model$forest$independent.variable.names
+  feature_df <- feature_df[, expected, drop = FALSE]
+
+  # 3. Predict ONLY on Unknowns
   if (model$treetype != "Probability estimation") {
     warning("Model was not trained with probability = TRUE. Thresholding will be ignored.")
     threshold <- 0
   }
 
-  feat_mat <- SummarizedExperiment::assay(spe, assay_name)
-  feature_df <- as.data.frame(t(feat_mat))
-
-  # Align features
-  expected <- model$forest$independent.variable.names
-  feature_df <- feature_df[, expected, drop = FALSE]
-
-  # 1. Get Probabilities
   pred_obj <- stats::predict(model, feature_df)
-  prob_mat <- pred_obj$predictions # This is a matrix of probabilities per class
+  prob_mat <- pred_obj$predictions # This is now ONLY for the unknown cells
+  row.names(prob_mat)=row.names(feature_df)
 
-  # 2. Determine winners and their confidence level
+
+  # 4. Determine winners and confidence for the subset
   max_probs <- apply(prob_mat, 1, max)
   winning_indices <- apply(prob_mat, 1, which.max)
   raw_preds <- colnames(prob_mat)[winning_indices]
 
-  # 3. Apply Thresholding
-  # If confidence < threshold, label as 'Unassigned'
-  final_preds <- ifelse(max_probs >= threshold, raw_preds, unassigned_label)
+  # Apply Thresholding
+  final_preds_subset <- ifelse(max_probs >= threshold, raw_preds, unassigned_label)
 
-  # 4. Fill into SPE
-  labels <- SummarizedExperiment::colData(spe)[[label_col]]
+  # 5. Fill back into the full SPE
+  # Initialize output columns
+  full_final_preds <- rep(NA_character_, ncol(spe))
+  full_confidence <- rep(NA_character_, ncol(spe))
   filled <- labels
 
-  # We only fill cells that were originally 'Unknown' or NA
-  replace_idx <- is.na(labels) | labels == unknown_label
-  filled[replace_idx] <- final_preds[replace_idx]
+  # Map subset results to the correct indices
+  full_final_preds[replace_idx] <- final_preds_subset
+  full_confidence[replace_idx] <- max_probs
+  filled[replace_idx] <- final_preds_subset
 
-  SummarizedExperiment::colData(spe)[[pred_col]] <- final_preds
+  SummarizedExperiment::colData(spe)[[pred_col]] <- full_final_preds
   SummarizedExperiment::colData(spe)[[out_col]] <- filled
+  SummarizedExperiment::colData(spe)$rf_confidence <- as.numeric(full_confidence)
 
-  # Optional: store the max probability for QC
-  SummarizedExperiment::colData(spe)$rf_confidence <- max_probs
-
+  # Return the input spe and the probability matrix (only for unknown cells)
   return(list(spe = spe, prob_mat = prob_mat))
 }
-
 
 #' Tabular and text summaries of RF performance
 #'
@@ -805,6 +817,11 @@ apply_cutoff_labels <- function(res,
 #' @param chunk_size Integer number of test cells processed per block inside
 #'   weighted kNN calls. Smaller values reduce peak RAM with identical
 #'   predictions at the cost of runtime. Default is \code{250L}.
+#' @param BPPARAM A \code{\link[BiocParallel]{BiocParallelParam}} object
+#'   specifying the parallel back-end to use for processing repeats.
+#'   Use \code{\link[BiocParallel]{MulticoreParam}} (Linux/Mac) or
+#'   \code{\link[BiocParallel]{SnowParam}} (Windows) for speed.
+#'   Default is \code{BiocParallel::SerialParam()}.
 #'
 #' @return A named list containing:
 #' \describe{
@@ -834,7 +851,8 @@ train_custom_knn <- function(spe,
                              k = 5,
                              method = "pearson",
                              seed = NULL,
-                             chunk_size = 250L) {
+                             chunk_size = 250L,
+                             BPPARAM = BiocParallel::SerialParam()) { # Added BPPARAM
 
   if (!is.null(seed)) set.seed(seed)
   .assert_spe(spe)
@@ -849,17 +867,20 @@ train_custom_knn <- function(spe,
   core_idx <- which(lab_vec != unknown_label & !is.na(lab_vec))
   core_mat <- feature_mat[core_idx, , drop = FALSE]
   core_labels <- factor(lab_vec[core_idx])
-
   class_levels <- levels(core_labels)
-  # Accumulate probability matrices across repeats
-  sum_prob_mat <- matrix(0, nrow = nrow(core_mat), ncol = length(class_levels),
-                         dimnames = list(rownames(core_mat), class_levels))
 
-  # --- STAGE 1: WEIGHTED CONSENSUS CLEANING ---
-  message(sprintf("Starting Weighted kNN (%s) cleaning on %d cells: %d repeats...", method, nrow(core_mat), repeats))
-  match_counts <- setNames(numeric(nrow(core_mat)), rownames(core_mat))
+  # --- STAGE 1: PARALLEL WEIGHTED CONSENSUS ---
+  message(sprintf("Starting Parallel Weighted kNN (%s) cleaning on %d cells: %d repeats...",
+                  method, nrow(core_mat), repeats))
 
-  for (r in seq_len(repeats)) {
+  # Parallelize across repeats
+  all_repeat_results <- BiocParallel::bplapply(seq_len(repeats), function(r) {
+    # Initialize local accumulators for this worker
+    local_sum_prob <- matrix(0, nrow = nrow(core_mat), ncol = length(class_levels),
+                             dimnames = list(rownames(core_mat), class_levels))
+    local_matches <- setNames(numeric(nrow(core_mat)), rownames(core_mat))
+
+    # Fold assignment
     fold_assign <- integer(nrow(core_mat))
     for (cls in class_levels) {
       cls_idx <- which(core_labels == cls)
@@ -870,8 +891,6 @@ train_custom_knn <- function(spe,
       train_idx <- which(fold_assign != k_fold)
       test_idx <- which(fold_assign == k_fold)
 
-      # Use your wkNN logic to get probabilities for the test fold
-      # We call your internal logic here
       res_wkNN <- predict_wknn_multi(
         train_data = core_mat[train_idx, , drop = FALSE],
         test_data = core_mat[test_idx, , drop = FALSE],
@@ -882,13 +901,18 @@ train_custom_knn <- function(spe,
         chunk_size = chunk_size
       )
 
-      # Accumulate the weighted probability matrix
-      sum_prob_mat[test_idx, ] <- sum_prob_mat[test_idx, ] + res_wkNN$prob_matrix
-
-      # Track hard-label matches for cleaning
-      match_counts[test_idx] <- match_counts[test_idx] + as.numeric(res_wkNN$labels == core_labels[test_idx])
+      local_sum_prob[test_idx, ] <- local_sum_prob[test_idx, ] + res_wkNN$prob_matrix
+      local_matches[test_idx] <- local_matches[test_idx] + as.numeric(res_wkNN$labels == core_labels[test_idx])
     }
-  }
+
+    return(list(probs = local_sum_prob, matches = local_matches))
+  }, BPPARAM = BPPARAM)
+
+  # --- Aggregation ---
+  message("Aggregating results from workers...")
+  # Combine the probability matrices and match counts from all workers
+  sum_prob_mat <- Reduce("+", lapply(all_repeat_results, `[[`, "probs"))
+  match_counts <- Reduce("+", lapply(all_repeat_results, `[[`, "matches"))
 
   # Average the probabilities across all repeats
   avg_core_prob_mat <- sum_prob_mat / repeats
@@ -896,66 +920,55 @@ train_custom_knn <- function(spe,
 
   # 2. Update Labels
   inconsistent_names <- names(agreement_rate)[agreement_rate < agreement_thresh]
-  valid_core_names <- names(agreement_rate)[agreement_rate >= agreement_thresh]
+  valid_core_names   <- names(agreement_rate)[agreement_rate >= agreement_thresh]
 
+  # Update SPE
   cleaned_labels <- lab_vec
   cleaned_labels[colnames(spe) %in% inconsistent_names] <- unknown_label
   SummarizedExperiment::colData(spe)$cleaned_core_label <- cleaned_labels
-  valid_core_idx <- which(rownames(core_mat) %in% valid_core_names)
+
+  # --- THE FIX: Subset the Probability Matrix here ---
+  # Only keep rows that match the valid_core_names
+  cleaned_prob_mat <- avg_core_prob_mat[valid_core_names, , drop = FALSE]
+  cleaned_agreement_rates <- agreement_rate[valid_core_names]
 
   return(list(
     spe = spe,
     model = list(
       type = "wknn",
-      reference_data   = as.data.frame(core_mat[valid_core_idx, , drop = FALSE]),
-      reference_labels = factor(core_labels[valid_core_idx], levels = class_levels),
+      reference_data   = as.data.frame(core_mat[valid_core_names, , drop = FALSE]),
+      reference_labels = factor(core_labels[rownames(core_mat) %in% valid_core_names],
+                                levels = class_levels),
       params = list(k = k, method = method)
     ),
-    core_prob_mat  = avg_core_prob_mat,
-    agreement_rates = agreement_rate,
-    features_used  = features_use
+    # Now these dimensions align perfectly with reference_data
+    core_prob_mat   = cleaned_prob_mat,
+    agreement_rates = cleaned_agreement_rates,
+    features_used   = features_use
   ))
-
 }
 
-#' Predict Unknown Cells using kNN Reference
+
+#' Predict and fill unknown labels using a weighted kNN model
 #'
-#' Uses a trained kNN model to predict cell types for cells labelled as Unknown
-#' or Unassigned, based on marker expression from a specified assay.
+#' This function takes a SpatialExperiment object and a trained kNN reference
+#' to predict labels for "Unknown" or NA cells. It returns the updated SPE
+#' and a probability matrix for the predicted cells only.
 #'
-#' @param spe A \code{SpatialExperiment} object containing cell data.
-#' @param knn_ref Output from \code{train_custom_knn()}, containing the trained
-#'   kNN model and reference data.
-#' @param assay_name Character string specifying the assay to use for marker
-#'   expression. Default is \code{"norm"}.
-#' @param label_col Character string specifying the column in \code{colData(spe)}
-#'   containing the initial cell type labels. Default is \code{"cutoff_label"}.
-#' @param out_col Character string specifying the name of the output column added
-#'   to \code{colData(spe)} containing the final filled labels. Default is
-#'   \code{"knn_label_filled"}.
-#' @param pred_col Character string specifying the name of the output column added
-#'   to \code{colData(spe)} containing the raw kNN predictions. Default is
-#'   \code{"knn_pred"}.
-#' @param unknown_label Character string specifying the label used to identify
-#'   unknown cells. Default is \code{"Unknown"}.
-#' @param unassigned_label Character string specifying the label used to identify
-#'   unassigned cells. Default is \code{"Unassigned"}.
-#' @param threshold Numeric value between 0 and 1 specifying the minimum
-#'   proportion of neighbours required to agree on a label for a prediction to
-#'   be accepted. Default is \code{0.6}.
-#' @param k Integer specifying the number of nearest neighbours to use for
-#'   prediction. Default is \code{5}.
-#' @param dist_method Character string specifying the distance metric used for
-#'   kNN similarity calculation (e.g., \code{"pearson"}, \code{"cosine"},
-#'   \code{"euclidean"}). Default is \code{"pearson"}.
-#' @param chunk_size Integer number of test cells processed per weighted kNN
-#'   block. Smaller values reduce peak RAM with identical predictions at the
-#'   cost of runtime. Default is \code{250L}.
+#' @param spe A SpatialExperiment or SingleCellExperiment object.
+#' @param knn_ref A list containing the reference data, labels, and features (from train_custom_knn).
+#' @param assay_name Name of the assay to use for features (default "norm").
+#' @param label_col The original label column containing "Unknown" cells.
+#' @param out_col Output column name for filled labels.
+#' @param pred_col Column name for raw kNN predictions.
+#' @param unknown_label String identifying missing labels (default "Unknown").
+#' @param unassigned_label Label for cells below the confidence threshold.
+#' @param threshold Minimum vote proportion (0-1) to accept a label (default 0.6).
+#' @param k Number of neighbors.
+#' @param dist_method Distance metric ("pearson", "cosine", etc.).
+#' @param chunk_size Number of cells to process per chunk for memory management.
 #'
-#' @return A \code{SpatialExperiment} object with two new columns added to
-#'   \code{colData}: \code{out_col} containing the final predicted labels and
-#'   \code{pred_col} containing the raw kNN predictions.
-#'
+#' @return A list containing the updated \code{spe} and the \code{prob_mat} (unknowns only).
 #' @export
 predict_unknown_with_knn <- function(spe,
                                      knn_ref,
@@ -968,69 +981,74 @@ predict_unknown_with_knn <- function(spe,
                                      threshold = 0.6,
                                      k = 5,
                                      dist_method = "pearson",
-                                     chunk_size = 250L) {
+                                     chunk_size = 10000L) {
 
-  # 1. Feature Prep
-  feat_mat <- SummarizedExperiment::assay(spe, assay_name)
-  feature_mat <- t(as.matrix(feat_mat[knn_ref$features_used, , drop = FALSE]))
-
-  # 2. Get Probabilities (scClassify style)
-  # 'prob = TRUE' returns the proportion of the winning class votes as an attribute
-  # knn_res <- class::knn(train = knn_ref$reference_data,
-  #                       test = feature_df,
-  #                       cl = knn_ref$reference_labels,
-  #                       k = k,
-  #                       prob = TRUE)
-
-  knn_res <- predict_wknn_multi(
-    train_data = knn_ref$model$reference_data,
-    test_data = feature_mat,
-    train_labels = knn_ref$model$reference_labels,
-    k = k,
-    method = dist_method,
-    return_matrix = TRUE,
-    chunk_size = chunk_size
-  )
-
-  # raw_preds <- as.character(knn_res)
-  # confidences <- attr(knn_res, "prob")
-
-  raw_preds <- knn_res$labels
-  confidences <- knn_res$probs
-  prob_mat <- knn_res$prob_matrix # The new Likelihood Matrix
-
-  # 3. Apply Confidence Thresholding
-  # If the % of neighbor votes < threshold, label as 'Unassigned'
-  final_preds <- ifelse(confidences >= threshold, raw_preds, unassigned_label)
-
-  # 4. Fill into SPE (Hybrid Logic)
-  # We only replace cells that were 'Unknown' in the original OR
-  # cells that were turned into 'Unknown' by the train_custom_knn cleaning step.
-
-  # Step A: Get the current labels (using the cleaned ones if available)
+  # 1. Identify cells that actually need prediction
+  # We check cleaned_core_label first (result of Stage 1 cleaning)
   current_labels <- if ("cleaned_core_label" %in% names(SummarizedExperiment::colData(spe))) {
     SummarizedExperiment::colData(spe)$cleaned_core_label
   } else {
     SummarizedExperiment::colData(spe)[[label_col]]
   }
 
-  filled <- current_labels
-
-  # Step B: Identify cells that need a prediction
-  # (Either they were always Unknown, or they failed the cleaning consensus)
   replace_idx <- is.na(current_labels) | current_labels == unknown_label
 
-  filled[replace_idx] <- final_preds[replace_idx]
+  if (sum(replace_idx) == 0) {
+    message("No unknown cells found. Returning original SPE.")
+    return(list(spe = spe, prob_mat = NULL))
+  }
 
-  # 5. Store results back to SPE
-  SummarizedExperiment::colData(spe)[[pred_col]] <- final_preds
-  SummarizedExperiment::colData(spe)[[out_col]] <- filled
-  SummarizedExperiment::colData(spe)$knn_confidence <- confidences
+  # 2. Feature Preparation (Subset to Unknowns only for speed)
+  feat_mat <- SummarizedExperiment::assay(spe, assay_name)
+  # Transpose the subset of features used during training
+  unknown_feature_mat <- t(as.matrix(feat_mat[knn_ref$features_used, replace_idx, drop = FALSE]))
 
-  return(list(spe = spe, prob_mat = prob_mat))
+  # 3. Get Probabilities via weighted kNN
+  message(sprintf("Predicting %d unknown cells using %s kNN...", sum(replace_idx), dist_method))
+
+  knn_res <- predict_wknn_multi(
+    train_data    = as.matrix(knn_ref$model$reference_data),
+    test_data     = unknown_feature_mat,
+    train_labels  = knn_ref$model$reference_labels,
+    k             = k,
+    method        = dist_method,
+    return_matrix = TRUE,
+    chunk_size    = chunk_size
+  )
+
+  # Extract results from the prediction engine
+  raw_preds_subset <- knn_res$labels
+  confidences_subset <- knn_res$probs
+  prob_mat_subset <- knn_res$prob_matrix # This only contains the unknowns
+
+  # 4. Apply Confidence Thresholding
+  # If the vote proportion is less than the threshold, mark as Unassigned
+  final_preds_subset <- ifelse(confidences_subset >= threshold,
+                               raw_preds_subset,
+                               unassigned_label)
+
+  # 5. Map Results back to Full Dataset
+  # Initialize vectors for the full SPE
+  full_preds      <- rep(NA_character_, ncol(spe))
+  full_confidence <- rep(NA_real_, ncol(spe))
+  filled_labels   <- current_labels
+
+  # Place predicted values into the correct slots
+  full_preds[replace_idx]      <- final_preds_subset
+  full_confidence[replace_idx] <- confidences_subset
+  filled_labels[replace_idx]   <- final_preds_subset
+
+  # 6. Store back to SPE colData
+  SummarizedExperiment::colData(spe)[[pred_col]]      <- full_preds
+  SummarizedExperiment::colData(spe)[[out_col]]       <- filled_labels
+  SummarizedExperiment::colData(spe)$knn_confidence   <- full_confidence
+
+  # Return the updated SPE and the probability matrix (Unknowns only)
+  return(list(
+    spe = spe,
+    prob_mat = prob_mat_subset
+  ))
 }
-
-
 
 
 
@@ -1224,6 +1242,7 @@ predict_wknn_multi <- function(train_data,
 #' @param chunk_size Integer specifying the number of cells processed per chunk
 #'   during prediction. Increasing this value may improve speed but requires
 #'   more memory. Default is \code{1000L}
+#' @param unassigned_label character label for Unassigned cells (default "Unassigned")
 #' @export
 predict_hierarchical_knn_recursive <- function(spe,
                                                hier_ref,

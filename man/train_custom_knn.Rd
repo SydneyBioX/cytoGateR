@@ -15,7 +15,9 @@ train_custom_knn(
   agreement_thresh = 0.8,
   k = 5,
   method = "pearson",
-  seed = NULL
+  seed = NULL,
+  chunk_size = 250L,
+  BPPARAM = BiocParallel::SerialParam()
 )
 }
 \arguments{
@@ -54,6 +56,16 @@ used for kNN. Options include \code{"pearson"}, \code{"spearman"},
 
 \item{seed}{Optional integer for random seed to ensure reproducibility.
 Default is \code{NULL}.}
+
+\item{chunk_size}{Integer number of test cells processed per block inside
+weighted kNN calls. Smaller values reduce peak RAM with identical
+predictions at the cost of runtime. Default is \code{250L}.}
+
+\item{BPPARAM}{A \code{\link[BiocParallel]{BiocParallelParam}} object
+specifying the parallel back-end to use for processing repeats.
+Use \code{\link[BiocParallel]{MulticoreParam}} (Linux/Mac) or
+\code{\link[BiocParallel]{SnowParam}} (Windows) for speed.
+Default is \code{BiocParallel::SerialParam()}.}
 }
 \value{
 A named list containing:

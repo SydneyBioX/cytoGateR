@@ -10,7 +10,8 @@ predict_wknn_multi(
   train_labels,
   k = 5,
   method = "pearson",
-  return_matrix = FALSE
+  return_matrix = FALSE,
+  chunk_size = 10000L
 )
 }
 \arguments{
@@ -27,6 +28,10 @@ predict_wknn_multi(
 \item{return_matrix}{Logical indicating whether to return the full probability
 matrix for all classes. If \code{FALSE}, only the predicted labels and
 associated probabilities are returned. Default is \code{FALSE}.}
+
+\item{chunk_size}{Optional integer number of test cells per block. If
+\code{NULL}, all test cells are processed in a single block (legacy
+behavior).}
 }
 \value{
 A list containing predicted 'labels' and 'probs'.
