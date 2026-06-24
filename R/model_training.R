@@ -1327,17 +1327,26 @@ predict_hierarchical_knn_recursive <- function(spe,
       )
 
       # FIX 3: stream-reduce votes — never cbind the full matrix stack
-      all_labels <- vapply(ensemble_out, `[[`, character(length(chunk_cells)), "labels")
-      # all_labels is (n_chunk × n_tasks) — still allocates, but only for one chunk
+      # Force matrix shape to avoid 1D drops for single-cell chunks.
+      all_labels <- matrix(
+        vapply(ensemble_out, `[[`, character(length(chunk_cells)), "labels"),
+        nrow = length(chunk_cells)
+      )
 
       label_levels <- sort(unique(as.vector(all_labels)))
 
-      # Tally votes as an integer matrix (n_chunk × n_levels)
-      vote_mat <- vapply(label_levels, function(lv)
-        as.integer(rowSums(all_labels == lv)), integer(length(chunk_cells)))
+      # Tally votes as an integer matrix (n_chunk × n_levels).
+      vote_mat <- matrix(
+        vapply(label_levels, function(lv)
+          as.integer(rowSums(all_labels == lv)), integer(length(chunk_cells))),
+        nrow = length(chunk_cells)
+      )
 
-      prob_vec <- rowMeans(
-        vapply(ensemble_out, `[[`, numeric(length(chunk_cells)), "probs"))
+      prob_mat <- matrix(
+        vapply(ensemble_out, `[[`, numeric(length(chunk_cells)), "probs"),
+        nrow = length(chunk_cells)
+      )
+      prob_vec <- rowMeans(prob_mat)
 
       # Merge this chunk's tallies into global accumulators
       if (is.null(chunk_vote_counts)) {
