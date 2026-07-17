@@ -1434,3 +1434,314 @@ neg_penalty <- function(expr_mat, neg_markers, cell_i) {
 #   SummarizedExperiment::colData(spe)[[out_col]] <- filled
 #   spe
 # }
+
+
+###############BIC
+
+
+
+#' Convert a tree to a tibble representation
+#'
+#' @param node A gating tree (node or leaf).
+#' @param parent Parent node id (used internally for recursion).
+#' @param id Node id for the current subtree (used internally for recursion).
+#'
+#' @return A tibble with columns `id`, `parent`, `type`, `label`.
+#' @export
+
+tree_to_df <- function(node, parent = NA_character_, id = "root") {
+  if (node$type == "leaf") {
+    return(tibble::tibble(
+      id = id,
+      parent = parent,
+      type = "leaf",
+      label = paste0("leaf\nn=", length(node$cells))
+    ))
+  }
+
+  this <- tibble::tibble(
+    id = id,
+    parent = parent,
+    type = "node",
+    label = sprintf("%s > %.2f\nsep=%.2f  w=%.2f",
+                    node$marker,
+                    node$cutoff,
+                    node$sep_score %||% NA_real_,
+                    node$w %||% NA_real_)
+  )
+
+  left <- tree_to_df(node$left, id, paste0(id, "_L"))
+  right <- tree_to_df(node$right, id, paste0(id, "_R"))
+
+  dplyr::bind_rows(this, left, right)
+}
+
+
+
+#' Print a cell-type gating tree
+#'
+#' @param node A gating tree (node or leaf) produced by [build_fullcoverage_tree()].
+#' @param indent String used internally for indentation during recursive printing.
+#'
+#' @return Invisibly returns `NULL`.
+#' @export
+print_celltype_tree <- function(node, indent = "") {
+  if (node$type == "leaf") {
+    cat(indent, "[leaf] depth =", node$depth,
+        " n_cells =", length(node$cells), "\n", sep = "")
+    return(invisible(NULL))
+  }
+
+  cat(indent,
+      sprintf("[depth %d] %s > %.3f  (sep = %.2f, w = %.2f, n = %d)\n",
+              node$depth,
+              node$marker,
+              node$cutoff,
+              node$sep_score %||% NA_real_,
+              node$w %||% NA_real_,
+              length(node$cells)),
+      sep = "")
+
+  cat(indent, " |- low\n", sep = "")
+  print_celltype_tree(node$left, paste0(indent, " |  "))
+
+  cat(indent, " `- high\n", sep = "")
+  print_celltype_tree(node$right, paste0(indent, "    "))
+}
+
+
+
+#' Fit a 2-component Gaussian mixture model
+#'
+#' @param x numeric vector
+#' @param cutoff_method Character. One of "mean" (midpoint of means) or
+#'   "equal_posteriors" (threshold where component posteriors are equal).
+#' @param gmm_model_names Optional character vector of model names to pass to
+#'   [mclust::Mclust()] (e.g., "V" to forbid equal-variance in 1D).
+#' @return list with GMM parameters or NULL
+#' @export
+fit_gmm_2 <- function(x,
+                      cutoff_method = c("mean", "equal_posteriors"),
+                      gmm_model_names = NULL) {
+  cutoff_method <- match.arg(cutoff_method)
+  x <- x[is.finite(x)]
+  if (length(x) < 50L || length(unique(x)) < 3L) return(NULL)
+
+  gmm2 <- tryCatch(
+    mclust::Mclust(x, G = 2, modelNames = gmm_model_names, verbose = FALSE),
+    error = function(e) NULL
+  )
+  if (is.null(gmm2) || length(gmm2$parameters$mean) != 2) return(NULL)
+
+  ## NEW: fit the unimodal (G=1) competitor and compare via BIC.
+  ## mclust's BIC convention is HIGHER = better fit.
+  gmm1 <- tryCatch(
+    mclust::Mclust(x, G = 1, modelNames = gmm_model_names, verbose = FALSE),
+    error = function(e) NULL
+  )
+
+  bic2 <- gmm2$bic
+  bic1 <- if (!is.null(gmm1)) gmm1$bic else NA_real_
+
+  ## NEW: BIC-to-posterior-probability approximation (Kass & Raftery 1995).
+  ## w -> 1 means strong evidence for two components; w -> 0.5 means the
+  ## two models are indistinguishable; w below 0.5 would mean G=1 is
+  ## actually favored (shouldn't normally happen since we picked gmm2,
+  ## but w still reports the true relative evidence either way).
+  if (is.finite(bic1) && is.finite(bic2)) {
+    m <- max(bic1, bic2)  # subtract max for numerical stability before exponentiating
+    w <- exp((bic2 - m) / 2) / (exp((bic2 - m) / 2) + exp((bic1 - m) / 2))
+  } else {
+    ## G=1 fit failed to converge -- no competing model to compare against,
+    ## so there's no evidence AGAINST bimodality. Default to full trust.
+    w <- 1
+  }
+
+  mu <- as.numeric(gmm2$parameters$mean)
+
+  sig2 <- gmm2$parameters$variance$sigmasq
+  if (length(sig2) == 1) {
+    sig2 <- rep(sig2, 2)
+  }
+  sig2 <- as.numeric(sig2)
+  pi <- as.numeric(gmm2$parameters$pro)
+
+  ord <- order(mu)
+  mu1 <- mu[ord[1]]; mu2 <- mu[ord[2]]
+  s1 <- sqrt(sig2[ord[1]]); s2 <- sqrt(sig2[ord[2]])
+  p1 <- pi[ord[1]]; p2 <- pi[ord[2]]
+
+  sep <- abs(mu2 - mu1) / sqrt(s1^2 + s2^2)
+  cutoff <- if (cutoff_method == "equal_posteriors") {
+    gmm_equal_posterior_cutoff(mu1, mu2, s1, s2, p1, p2)
+  } else {
+    mean(c(mu1, mu2))
+  }
+
+  list(mu1 = mu1, mu2 = mu2, s1 = s1, s2 = s2, p1 = p1, p2 = p2,
+       cutoff = cutoff, sep_score = sep,
+       w = w, bic1 = bic1, bic2 = bic2)   ## NEW fields
+}
+
+
+
+#' Build full-coverage gating tree
+#'
+#' @param expr_mat expression matrix
+#' @param markers_pos positive markers
+#' @param markers_neg negative markers
+#' @param cell_idx indices
+#' @param depth depth
+#' @param max_depth max depth
+#' @param min_cells minimum cells
+#' @param min_score minimum separability
+#' @param cutoff_method Cutoff selection method passed to [fit_gmm_2()].
+#' @param gmm_model_names Optional character vector of model names to pass to
+#'   [mclust::Mclust()] (e.g., "V" to forbid equal-variance in 1D).
+#' @return tree object
+#' @export
+
+build_fullcoverage_tree <- function(expr_mat,
+                                    markers_pos,
+                                    markers_neg = character(0),
+                                    cell_idx = seq_len(ncol(expr_mat)),
+                                    depth = 0,
+                                    max_depth = 4,
+                                    min_cells = 200,
+                                    min_score = 0.5,
+                                    w_threshold = 0.5,   ## NEW argument
+                                    cutoff_method = c("mean", "equal_posteriors"),
+                                    gmm_model_names = NULL) {
+  cutoff_method <- match.arg(cutoff_method)
+
+  markers_pos <- intersect(markers_pos, rownames(expr_mat))
+  markers_neg <- intersect(markers_neg, rownames(expr_mat))
+
+  if (length(cell_idx) < min_cells || depth >= max_depth || length(markers_pos) == 0) {
+    return(list(type = "leaf", depth = depth, cells = cell_idx))
+  }
+
+  Xpos <- as.matrix(expr_mat[markers_pos, cell_idx, drop = FALSE])
+  pos_score <- colMeans(Xpos, na.rm = TRUE)
+
+  neg_score <- 0
+  if (length(markers_neg) > 0) {
+    Xneg <- as.matrix(expr_mat[markers_neg, cell_idx, drop = FALSE])
+    neg_score <- colMeans(Xneg, na.rm = TRUE)
+  }
+
+  target <- ifelse(pos_score - neg_score > median(pos_score - neg_score, na.rm = TRUE), 1, 0)
+
+  marker_stats <- lapply(markers_pos, function(m) {
+    x <- as.numeric(expr_mat[m, cell_idx])
+    fit <- fit_gmm_2(x, cutoff_method = cutoff_method, gmm_model_names = gmm_model_names)
+    if (is.null(fit)) {
+      return(data.frame(marker = m, sep = NA_real_, acc = NA_real_,
+                        cutoff = NA_real_, scale = NA_real_, w = NA_real_))  ## NEW: w column
+    }
+
+    cutoff <- fit$cutoff
+    scale <- sqrt(fit$s1^2 + fit$s2^2)
+    if (!is.finite(scale) || scale == 0) scale <- .safe_mad(x)
+
+    pred <- ifelse(x > cutoff, 1, 0)
+    acc <- max(mean(pred == target, na.rm = TRUE),
+               mean((1 - pred) == target, na.rm = TRUE))
+
+    data.frame(marker = m, sep = fit$sep_score, acc = acc,
+               cutoff = cutoff, scale = scale, w = fit$w)  ## NEW: carry w through
+  })
+  print(marker_stats)
+  marker_stats <- do.call(rbind, marker_stats)
+  marker_stats$sep <- as.numeric(marker_stats$sep)
+  marker_stats$acc <- as.numeric(marker_stats$acc)
+  marker_stats$w   <- as.numeric(marker_stats$w)          ## NEW
+  marker_stats$combo <- marker_stats$sep + 2 * (marker_stats$acc - 0.5)
+
+  marker_stats <- marker_stats[order(-marker_stats$combo), , drop = FALSE]
+
+  ## NEW: eligibility scan. Ranking is unchanged (still combo-based); the
+  ## difference is we no longer only look at row 1 -- we walk down the
+  ## combo-sorted list until we find the first marker that ALSO clears the
+  ## bimodality-evidence bar. A marginal top-combo-but-low-w marker no
+  ## longer blocks a solid, genuinely bimodal runner-up.
+  eligible <- which(
+    is.finite(marker_stats$sep) & marker_stats$sep >= min_score &
+      is.finite(marker_stats$w)   & marker_stats$w   >= w_threshold
+  )
+
+  if (length(eligible) == 0) {
+    return(list(type = "leaf", depth = depth, cells = cell_idx))
+  }
+
+  best <- marker_stats[eligible[1], ]
+  best_marker <- best$marker
+  cutoff <- as.numeric(best$cutoff)
+  scale <- as.numeric(best$scale)
+
+  x_best <- as.numeric(expr_mat[best_marker, cell_idx])
+  left <- cell_idx[x_best <= cutoff]
+  right <- cell_idx[x_best > cutoff]
+
+  if (length(left) == 0 || length(right) == 0)
+    return(list(type = "leaf", depth = depth, cells = cell_idx))
+
+  remaining_pos <- setdiff(markers_pos, best_marker)
+
+  list(
+    type = "node",
+    depth = depth,
+    marker = best_marker,
+    cutoff = cutoff,
+    scale = scale,
+    sep_score = as.numeric(best$sep),
+    w = as.numeric(best$w),                                ## NEW: stored on the node
+    cells = cell_idx,
+    left = build_fullcoverage_tree(expr_mat, remaining_pos, markers_neg, left,
+                                   depth + 1, max_depth, min_cells, min_score, w_threshold,
+                                   cutoff_method = cutoff_method,
+                                   gmm_model_names = gmm_model_names),
+    right = build_fullcoverage_tree(expr_mat, remaining_pos, markers_neg, right,
+                                    depth + 1, max_depth, min_cells, min_score, w_threshold,
+                                    cutoff_method = cutoff_method,
+                                    gmm_model_names = gmm_model_names)
+  )
+}
+
+
+#' Collect scores along a tree path
+#'
+#' Traverse a gating tree for a single cell and compute node-wise marker scores
+#' along the deterministic path defined by comparing marker expression to each
+#' node's cutoff.
+#'
+#' @param tree A gating tree as produced by [build_fullcoverage_tree()].
+#' @param expr_mat Numeric matrix-like expression object with markers in rows and
+#'   cells in columns (e.g. `assay(spe, "norm")`). Row names must include marker names.
+#' @param cell_i Integer index of the cell/column to score.
+#'
+#' @return A numeric vector of per-node scores (may contain `NA_real_` if a marker value
+#'   is not finite for that cell).
+#' @export
+collect_path_scores <- function(tree, expr_mat, cell_i) {
+  scores <- numeric(0)
+  node <- tree
+  while (!is.null(node) && node$type == "node") {
+    m <- node$marker
+    x <- as.numeric(expr_mat[m, cell_i])
+    raw <- score_marker_logistic(x, node$cutoff, node$scale)
+
+    ## NEW: shrink the raw score toward the uninformative value (0.5) in
+    ## proportion to how much bimodal evidence this node's marker actually
+    ## had. w = 1 -> full trust, raw score unchanged. w close to
+    ## w_threshold -> score pulled most of the way to 0.5, barely moving
+    ## the combined probability either direction.
+    w <- node$w %||% 1  ## backward-compat: trees built before this change
+    ## have no $w field, default to full trust
+    s <- w * raw + (1 - w) * 0.5
+
+    scores <- c(scores, s)
+    if (is.finite(x) && x > node$cutoff) node <- node$right else node <- node$left
+  }
+  scores
+}
