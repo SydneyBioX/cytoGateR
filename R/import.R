@@ -11,4 +11,8 @@
 #' @importFrom stats predict dnorm as.dist cor
 #' @importFrom proxy dist
 #' @importFrom dbscan kNN
+#' @importFrom utils capture.output
 NULL
+utils::globalVariables(c(
+  "self"
+))
