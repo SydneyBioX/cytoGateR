@@ -31,7 +31,6 @@ fit_gmm_2 <- function(x,
     sig2 <- rep(sig2, 2)
   }
   sig2 <- as.numeric(sig2)
-  # --- FIX END ---
   pi <- as.numeric(gmm$parameters$pro)
 
   ord <- order(mu)

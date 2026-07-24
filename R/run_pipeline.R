@@ -128,7 +128,6 @@ run_tree_gating <- function(spe,
 
   lineage_table <- .clean_lineage_table(lineage_table, spe)
 
-  # --- ADD THIS LINE ---
   # Pre-calculate stats for all markers used in the lineage table
   all_markers <- unique(unlist(c(lineage_table$pos_markers, lineage_table$neg_markers))) #
   marker_stats <- fit_marker_stats(spe, all_markers, assay_name = assay_name) #

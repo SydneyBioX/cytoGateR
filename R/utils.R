@@ -65,15 +65,13 @@ calculate_f1 <- function(spe, ref_col = "ref_broad", pred_col = "pred_broad") {
     precision <- if ((tp + fp) > 0) tp / (tp + fp) else 0
     recall    <- if ((tp + fn) > 0) tp / (tp + fn) else 0
 
-    # Correct harmonic mean formula
     f1 <- if ((precision + recall) > 0) {
       2 * (precision * recall) / (precision * recall)
     } else {
       0
     }
 
-    # WAIT! I see the typo in my previous logic:
-    # It should be 2 * (p * r) / (p + r). Let's fix that below:
+    # It should be 2 * (p * r) / (p + r).
     f1_actual <- if ((precision + recall) > 0) (2 * precision * recall) / (precision + recall) else 0
 
     data.frame(
@@ -133,7 +131,7 @@ calculate_uncertainty <- function(prob_mat,
   prob_aligned[common_cells, ] <- prob_mat[common_cells, ]
   prob_mat <- prob_aligned
 
-  # --- 1. Information Theory Metrics (Sample-Independent) ---
+  # Entropy
   n_types <- ncol(prob_mat)
   labels  <- colnames(prob_mat)[max.col(prob_mat, ties.method = "first")]
 
@@ -151,7 +149,7 @@ calculate_uncertainty <- function(prob_mat,
   sorted_probs <- t(apply(prob_mat, 1, sort, decreasing = TRUE))
   margin_val   <- 1 - (sorted_probs[, 1] - sorted_probs[, 2])
 
-  # --- 2. Spatial Metrics (Sample-Aware) ---
+  # Spatial Metrics (Sample-Aware)
   samples        <- SummarizedExperiment::colData(spe)[[sample_col]]
   unique_samples <- unique(samples)
   spatial_discordance <- rep(NA, nrow(prob_mat))
@@ -171,11 +169,6 @@ calculate_uncertainty <- function(prob_mat,
     spatial_discordance[idx] <- sample_discordance
   }
 
-  # --- 3. Combined Uncertainty Index ---
-  # combined_idx <- (0.3 * entropy) +
-  #   (0.3 * gini_norm) +
-  #   (0.2 * margin_val) +
-  #   (0.2 * spatial_discordance)
 
   data.frame(
     cell_id              = spe_cells,
@@ -183,7 +176,6 @@ calculate_uncertainty <- function(prob_mat,
     gini_impurity        = gini_norm,
     margin_uncertainty   = margin_val,
     spatial_discordance  = spatial_discordance
-    # combined_uncertainty = combined_idx
   )
 }
 
@@ -207,7 +199,7 @@ calculate_spatial_prior_labels <- function(spe,
                                            protect_threshold = 0.85,
                                            out_col = "knn_spatial_label") {
 
-  # 0. Alignment — reorder/subset prob_mat rows to match SPE cell order
+
   prob_mat  <- as.matrix(prob_mat)
   spe_cells <- colnames(spe)
 
@@ -229,20 +221,20 @@ calculate_spatial_prior_labels <- function(spe,
   prob_aligned[common_cells, ] <- prob_mat[common_cells, ]
   prob_mat <- prob_aligned
 
-  # 1. Setup metadata
+
   coords     <- SpatialExperiment::spatialCoords(spe)
   cell_types <- colnames(prob_mat)
 
-  # 2. Extract kNN Confidence (the max probability per row)
+  # Extract kNN Confidence (the max probability per row)
   knn_confidence      <- apply(prob_mat, 1, max)
   current_best_labels <- cell_types[max.col(prob_mat, ties.method = "first")]
 
-  # 3. Fast Spatial Neighbor Search
+  # Fast Spatial Neighbor Search
   knn_spatial <- dbscan::kNN(coords, k = k_spatial)
 
   message(sprintf("Integrating spatial context (Protecting cells > %s confidence)...", protect_threshold))
 
-  # 4. Apply Bayesian Update
+  # Apply Bayesian Update
   spatial_results <- vapply(seq_len(nrow(prob_mat)), function(i) {
     if (is.na(knn_confidence[i])) return(NA_character_)
 
@@ -262,7 +254,6 @@ calculate_spatial_prior_labels <- function(spe,
     return(cell_types[which.max(posterior)])
   }, character(1))
 
-  # 5. Store results — aligned to SPE cell order by construction
   SummarizedExperiment::colData(spe)[[out_col]] <- spatial_results
   return(spe)
 }

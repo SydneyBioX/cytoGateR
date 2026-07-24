@@ -18,7 +18,6 @@ build_hierarchical_reference <- function(spe,
 
   .assert_spe(spe)
 
-  # 1. Extract core data
   cd <- as.data.frame(SummarizedExperiment::colData(spe))
   core_idx <- which(!is.na(cd[[label_col]]) & cd[[label_col]] != unknown_label)
   core_spe <- spe[, core_idx]
@@ -26,14 +25,13 @@ build_hierarchical_reference <- function(spe,
   n_nodes <- nrow(hc_tree$merge)
   node_list <- list()
 
-  # Helper to find all leaf indices under a node
   get_leaves <- function(side, hc) {
     if (side < 0) return(hc$labels[-side])
     row <- hc$merge[side, ]
     return(c(get_leaves(row[1], hc), get_leaves(row[2], hc)))
   }
 
-  # 2. Iterate through internal nodes
+  # Iterate through internal nodes
   for (i in seq_len(n_nodes)) {
     left_labels <- get_leaves(hc_tree$merge[i, 1], hc_tree)
     right_labels <- get_leaves(hc_tree$merge[i, 2], hc_tree)
@@ -43,7 +41,7 @@ build_hierarchical_reference <- function(spe,
     node_labels <- ifelse(node_cells[[label_col]] %in% left_labels, "Left", "Right")
     expr_sub <- SummarizedExperiment::assay(node_cells, assay_name)
 
-    # 3. Marker Selection Logic
+    # Marker Selection Logic
     all_markers <- if(!is.null(marker_stats)) names(marker_stats) else rownames(spe)
 
     if (!is.null(top_n) && !is.null(marker_stats)) {
@@ -64,7 +62,6 @@ build_hierarchical_reference <- function(spe,
       relevant_markers <- all_markers
     }
 
-    # 4. Store training data
     node_list[[paste0("Node_", i)]] <- list(
       train_data = as.data.frame(t(expr_sub[relevant_markers, , drop = FALSE])),
       train_labels = factor(node_labels),
@@ -96,20 +93,15 @@ build_lineage_hierarchy <- function(spe,
   .assert_spe(spe)
   cd <- as.data.frame(SummarizedExperiment::colData(spe))
 
-  # 1. Filter to core cells only (exclude Unknown)
   core_cells <- spe[, !is.na(cd[[label_col]]) & cd[[label_col]] != "Unknown"]
 
-  # 2. Calculate Pseudobulk (Mean expression per cell type)
   feat_mat <- SummarizedExperiment::assay(core_cells, assay_name)
   labels <- SummarizedExperiment::colData(core_cells)[[label_col]]
 
-  # Compute column means for each cell type
   avg_expr <- sapply(unique(labels), function(ct) {
     rowMeans(feat_mat[, labels == ct, drop = FALSE])
   })
 
-  # 3. Hierarchical Clustering (The 'Tree')
-  # We use correlation distance as it's more robust for cell types
   dist_mat <- as.dist(1 - cor(avg_expr))
   hc <- stats::hclust(dist_mat, method = "complete")
 

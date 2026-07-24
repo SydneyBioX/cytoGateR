@@ -1,54 +1,27 @@
 ---
-title: "cytoGateR vignette"
+title: "Basics"
 editor: source
-date: now
-date-format: "h:mm a DD MMMM YYYY"
+author: Matthew
+date: "2026-02-15"
 params:
   evalc: TRUE
   show: 'as.is'
+vignette: >
+  %\VignetteIndexEntry{Basic Pipeline}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
 format:
   html:
     toc: true
-    toc-depth: 3
+    toc_depth: 3
     number-sections: true
     theme: cerulean
     highlight: tango
-    code-fold: true
+    code-fold: false
     code-tools: true
     embed-resources: true
     lightbox: true
-    toc-location: left-body
-    toc-title: Contents
-    page-layout: full
-    grid:
-      body-width: 1400px     # Explicitly sets the content width (Standard is ~800px)
-      sidebar-width: 200px   # Keeps sidebar standard size (if you have one)
-      margin-width: 200px
-execute:
-  cache: false
-knitr:
-  opts_chunk:
-    autodep: true
 ---
-
-```{css, echo=FALSE}
-/* 1. Force the Tab Content to take up 100% of the available space */
-.tab-content {
-  width: 100% !important;
-}
-
-/* 2. Force images specifically inside tabs to stretch */
-.tab-content img {
-  width: 100% !important;   /* Stretch to fill container */
-  height: auto !important;  /* Maintain aspect ratio */
-  max-width: none !important; /* Override standard Bootstrap limits */
-}
-
-/* 3. Optional: Ensure the figure container doesn't restrict the image */
-.tab-content figure {
-  width: 100% !important;
-}
-```
 
 # Basic Pipeline Graph
 
@@ -58,15 +31,15 @@ knitr:
 
 ## Load in the cytoGateR
 
-```{r cytoGateR}
-devtools::document()
-devtools::load_all()
+```{r}
+# devtools::document()
+# devtools::load_all()
 # devtools::install() # for if you want the package on system
 ```
 
 ## Other Libraries
 
-```{r libraries}
+```{r}
 suppressPackageStartupMessages({
   library(tidyverse)
   library(SpatialExperiment)
@@ -131,7 +104,7 @@ plot_marker_density(
 ### Extract markers
 
 ```{r extract-markers}
-rownames(spe)
+sort(row.names(spe))
 ```
 
 ### LLM Generates lineage table
@@ -207,8 +180,7 @@ plot_score_hist(res_pub)
 ```{r apply-cutoff}
 res_pub <- apply_cutoff_labels(res_pub,
                                label_col = "cutoff_label",
-                               unknown_label = "Unknown",
-                               cutoff_fn = function(x) quantile(x, 0.99))
+                               unknown_label = "Unknown")
 plot_label_counts(spe = res_pub$spe,
                   label_col = "cutoff_label")
 ```
@@ -218,9 +190,10 @@ So we have a core group of cell identified at the top 2% which we will now train
 ## Train Random Forest
 
 ```{r train-rf}
-rf_pub <- train_custom_randomforest(res_pub$spe,
+rf_pub <- train_custom_randomforest(res_pub$spe,assay_name ="exprs",
                           label_col = "cutoff_label")
 ```
+
 
 ## Visualise RF Metrics from Cross Validation
 
@@ -242,9 +215,8 @@ plot_class_metrics(class_metrics_pub, title = "Public lineage: per-class metrics
 ## Apply Random Forest to the "Unknown" outside the core group of cells
 
 ```{r apply-rf}
-
 rf_pub$spe <- predict_unknown_with_randomforest(rf_pub$spe,
-                                       rf_pub$model,
+                                       rf_pub$model,assay_name = "exprs",
                                        label_col = "cleaned_core_label",
                                        out_col = "cutoff_label_filled")
 
@@ -324,7 +296,7 @@ ggpubr::ggarrange(
     )+ theme(title = element_blank(), plot.subtitle = element_blank()),
     plot_labelled_cells(
       spe_pub_type,
-      col_label = "cell_type_pub",
+      col_label = "cell_type",
       image_index = 1:4,
       image_col = "image_name",
       point_size = 0.3,
@@ -377,6 +349,55 @@ ggpubr::ggarrange(
 ```
 
 
+## Spatial Evaluation 2nd
+
+```{r}
+spe_pub_type <- rf_pub_2nd$spe[,colData(rf_pub_2nd$spe)$cell_type_pub != "Unknown"]
+# colData(spe_pub_type)$cell_type_pub |> table()
+
+# drop unlabelled from cell_labels
+spe_pub_labels <- rf_pub_2nd$spe[,!is.na(colData(rf_pub_2nd$spe)$cell_labels_pub)]
+
+
+all_labels <- unique(c(
+  as.character(spe_pub_type$cell_labels_2nd),
+  as.character(spe_pub_type$cell_type_pub)
+))
+
+my_colors <- as.vector(pals::polychrome(length(all_labels)))
+names(my_colors) <- all_labels
+
+
+ggpubr::ggarrange(
+  plotlist = list(
+    plot_labelled_cells(
+      spe_pub_type,
+      col_label = "cell_labels_2nd",
+      image_index = 1:8,
+      image_col = "image_name",
+      point_size = 0.3,
+      label_levels = all_labels,  # Forces the legend order to match
+      label_colors = my_colors    # Forces the colors to match
+    )+ theme(title = element_blank(), plot.subtitle = element_blank()),
+    plot_labelled_cells(
+      spe_pub_type,
+      col_label = "cell_type_pub",
+      image_index = 1:8,
+      image_col = "image_name",
+      point_size = 0.3,
+      label_levels = all_labels,
+      label_colors = my_colors
+    )
+    + theme(title = element_blank(), plot.subtitle = element_blank())
+  ),
+  common.legend = TRUE,
+  labels = c("cytoGateR", "Ground Truth classifier"),
+  legend = "bottom",
+  label.y = 1.02
+)
+
+```
+
 
 ## Train Random Forest 3rd round
 
@@ -411,9 +432,6 @@ ggpubr::ggarrange(
   ncol =1
 )
 ```
-
-
-
 
 
 
