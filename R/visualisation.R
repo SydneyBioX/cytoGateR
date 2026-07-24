@@ -194,7 +194,7 @@ plot_ct_marker_intensity <- function(spe,
   }
 
   if (!is.null(fit)) {
-    cutoff <- fit$cutoff
+    # cutoff <- fit$cutoff
 
     n_cells <- nrow(marker_df)
     bw <- resolve_binwidth(marker_df$marker, binwidth)

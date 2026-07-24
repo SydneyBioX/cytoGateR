@@ -1254,11 +1254,6 @@ predict_hierarchical_knn_recursive <- function(spe,
 
     task_methods <- rep(dist_methods, each = repeats)  # length = n_tasks, just strings
 
-    # Accumulators for stream-reduce (FIX 3 – no cbind over all repeats at once)
-    vote_counts <- NULL   # will become (n_active × n_labels) integer matrix
-    prob_sums   <- NULL   # (n_active) numeric vector
-    n_done      <- 0L
-
     chunks     <- split(active_indices,
                         ceiling(seq_along(active_indices) / chunk_size))
 

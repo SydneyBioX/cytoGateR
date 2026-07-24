@@ -65,12 +65,6 @@ calculate_f1 <- function(spe, ref_col = "ref_broad", pred_col = "pred_broad") {
     precision <- if ((tp + fp) > 0) tp / (tp + fp) else 0
     recall    <- if ((tp + fn) > 0) tp / (tp + fn) else 0
 
-    f1 <- if ((precision + recall) > 0) {
-      2 * (precision * recall) / (precision * recall)
-    } else {
-      0
-    }
-
     # It should be 2 * (p * r) / (p + r).
     f1_actual <- if ((precision + recall) > 0) (2 * precision * recall) / (precision + recall) else 0
 
