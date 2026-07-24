@@ -8,7 +8,7 @@ calculate_soft_scores(
   spe,
   marker_stats,
   lineage_table,
-  assay_name = "norm",
+  assay_name = "exprs",
   neg_strength = 0.8
 )
 }
@@ -19,7 +19,7 @@ calculate_soft_scores(
 
 \item{lineage_table}{Tibble with columns: cell_type, pos_markers (list), neg_markers (list).}
 
-\item{assay_name}{Assay to use (default "norm").}
+\item{assay_name}{Assay to use (default "exprs").}
 
 \item{neg_strength}{Penalty strength multiplier for negative markers (default 0.8).}
 }

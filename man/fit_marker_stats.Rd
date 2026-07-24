@@ -4,14 +4,14 @@
 \alias{fit_marker_stats}
 \title{Fit per-marker 2-GMM statistics for soft gating}
 \usage{
-fit_marker_stats(spe, markers, assay_name = "norm", min_n = 50L)
+fit_marker_stats(spe, markers, assay_name = "exprs", min_n = 50L)
 }
 \arguments{
 \item{spe}{SpatialExperiment / SingleCellExperiment.}
 
 \item{markers}{Character vector of marker names.}
 
-\item{assay_name}{Assay to use (default "norm").}
+\item{assay_name}{Assay to use (default "exprs").}
 
 \item{min_n}{Minimum finite observations required to fit GMM (default 50).}
 }

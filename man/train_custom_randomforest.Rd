@@ -7,7 +7,7 @@
 train_custom_randomforest(
   spe,
   label_col = "cutoff_label",
-  assay_name = "norm",
+  assay_name = "exprs",
   unknown_label = "Unknown",
   num.trees = 200,
   mtry = NULL,
@@ -26,7 +26,7 @@ train_custom_randomforest(
 \code{colData(spe)} (default \code{"cutoff_label"}).}
 
 \item{assay_name}{Character scalar naming the assay used as features
-(default \code{"norm"}).}
+(default \code{"exprs"}).}
 
 \item{unknown_label}{Character label treated as unlabeled and excluded from
 training/cleaning (default \code{"Unknown"}).}

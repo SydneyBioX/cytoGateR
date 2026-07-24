@@ -2,14 +2,14 @@
 #'
 #' @param spe SpatialExperiment / SingleCellExperiment.
 #' @param lineage_table Tibble with cell_type/pos_markers/neg_markers.
-#' @param assay_name Assay to use (default "norm").
+#' @param assay_name Assay to use (default "exprs").
 #' @param unknown_thresh Threshold for Unknown label (default 0.4).
 #' @param store Store results back into spe (default TRUE).
 #'
 #' @return A list with: spe (if store=TRUE), marker_stats, prob_mat, labels.
 #' @export
 run_soft_gating <- function(spe, lineage_table,
-                            assay_name = "norm",
+                            assay_name = "exprs",
                             unknown_thresh = 0.4,
                             store = TRUE) {
   .assert_spe(spe)
@@ -72,7 +72,7 @@ run_soft_gating <- function(spe, lineage_table,
 #'   must be list-columns of character vectors. Markers not present in
 #'   \code{spe} are dropped during cleaning.
 #' @param assay_name Character scalar naming the assay in \code{spe} used as the
-#'   expression matrix (default \code{"norm"}).
+#'   expression matrix (default \code{"exprs"}).
 #' @param max_depth Integer; maximum recursion depth of each gating tree.
 #' @param min_cells Integer; minimum number of cells required to allow a node split.
 #' @param min_score Numeric; minimum separability score required to accept a split.
@@ -111,7 +111,7 @@ run_soft_gating <- function(spe, lineage_table,
 #' @export
 run_tree_gating <- function(spe,
                             lineage_table,
-                            assay_name = "norm",
+                            assay_name = "exprs",
                             max_depth = 4,
                             min_cells = 200,
                             min_score = 0.5,

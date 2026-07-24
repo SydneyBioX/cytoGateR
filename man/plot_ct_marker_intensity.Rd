@@ -17,7 +17,7 @@ plot_ct_marker_intensity(
   label_levels = NULL,
   label_colors = NULL,
   drop_levels = FALSE,
-  assay_name = "norm"
+  assay_name = "exprs"
 )
 }
 \arguments{
@@ -49,7 +49,7 @@ label levels. If provided alongside `label_levels`, lengths must match.}
 \item{drop_levels}{Logical; if FALSE, keep unused levels in the legend.
 Default FALSE.}
 
-\item{assay_name}{Assay name to pull values from. Default "norm".}
+\item{assay_name}{Assay name to pull values from. Default "exprs".}
 }
 \value{
 A `ggplot` object.

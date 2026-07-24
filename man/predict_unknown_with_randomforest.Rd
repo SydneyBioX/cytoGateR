@@ -7,7 +7,7 @@
 predict_unknown_with_randomforest(
   spe,
   model,
-  assay_name = "norm",
+  assay_name = "exprs",
   label_col = "custom_label",
   out_col = "soft_tree_label_filled",
   pred_col = "rf_pred",
@@ -24,7 +24,7 @@ The model should be trained with \code{probability = TRUE} to enable
 threshold-based filtering.}
 
 \item{assay_name}{Character scalar specifying which assay to use as feature
-input (default \code{"norm"}).}
+input (default \code{"exprs"}).}
 
 \item{label_col}{Character scalar naming the existing label column in
 \code{colData(spe)} (default \code{"custom_label"}).}

@@ -7,7 +7,7 @@
 run_tree_gating(
   spe,
   lineage_table,
-  assay_name = "norm",
+  assay_name = "exprs",
   max_depth = 4,
   min_cells = 200,
   min_score = 0.5,
@@ -28,7 +28,7 @@ must be list-columns of character vectors. Markers not present in
 \code{spe} are dropped during cleaning.}
 
 \item{assay_name}{Character scalar naming the assay in \code{spe} used as the
-expression matrix (default \code{"norm"}).}
+expression matrix (default \code{"exprs"}).}
 
 \item{max_depth}{Integer; maximum recursion depth of each gating tree.}
 

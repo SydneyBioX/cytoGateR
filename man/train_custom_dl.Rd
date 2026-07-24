@@ -7,7 +7,7 @@
 train_custom_dl(
   spe,
   label_col = "cutoff_label",
-  assay_name = "norm",
+  assay_name = "exprs",
   unknown_label = "Unknown",
   features = "all",
   hidden_dims = c(64, 32),
@@ -33,7 +33,7 @@ train_custom_dl(
 \code{colData(spe)} (default \code{"cutoff_label"}).}
 
 \item{assay_name}{Character scalar naming the assay used as features
-(default \code{"norm"}).}
+(default \code{"exprs"}).}
 
 \item{unknown_label}{Character label treated as unlabeled and excluded from
 training/cleaning (default \code{"Unknown"}).}

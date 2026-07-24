@@ -2,13 +2,11 @@
 % Please edit documentation in R/deep_learning.R
 \name{.build_dl_net}
 \alias{.build_dl_net}
-\title{Define a small feedforward classifier: trunk of hidden layers + linear head.
-Returns raw logits (not softmax) -- torch's cross-entropy loss expects logits.}
+\title{Define a small feedforward classifier}
 \usage{
 .build_dl_net(input_dim, hidden_dims, n_classes, dropout)
 }
 \description{
-Define a small feedforward classifier: trunk of hidden layers + linear head.
 Returns raw logits (not softmax) -- torch's cross-entropy loss expects logits.
 }
 \keyword{internal}

@@ -5,8 +5,6 @@
 ##
 ## Requires the 'torch' package (Suggests, not Imports) -- all functions here
 ## check for it explicitly so the rest of the package works without it.
-
-
 #' @keywords internal
 .require_torch <- function() {
   if (!requireNamespace("torch", quietly = TRUE)) {
@@ -33,7 +31,8 @@
 }
 
 
-#' Define a small feedforward classifier: trunk of hidden layers + linear head.
+#' Define a small feedforward classifier
+#'
 #' Returns raw logits (not softmax) -- torch's cross-entropy loss expects logits.
 #' @keywords internal
 .build_dl_net <- function(input_dim, hidden_dims, n_classes, dropout) {
@@ -55,7 +54,7 @@
   )()
 }
 
-#' Simple rank-based (Mann-Whitney) binary AUC, no external dependency.
+#' Simple rank-based binary AUC
 #' @keywords internal
 .binary_auc <- function(scores, labels_binary) {
   pos <- scores[labels_binary == 1]
@@ -68,7 +67,7 @@
 }
 
 
-#' Macro-averaged one-vs-rest AUC across classes (probs: cells x classes, 1-indexed y_int).
+#' Macro-averaged one-vs-rest AUC across classes
 #' @keywords internal
 .multiclass_auc <- function(prob_mat, y_int, n_classes) {
   aucs <- vapply(seq_len(n_classes), function(c) {
@@ -78,7 +77,7 @@
 }
 
 
-#' One eval-mode forward pass: returns loss, accuracy, macro OVR AUC for (x, y).
+#' Run one evaluation-mode forward pass
 #' @keywords internal
 .dl_eval_pass <- function(net, loss_fn, x, y_tensor, y_int_r, n_classes) {
   out <- torch::with_no_grad({ net(x) })
@@ -90,6 +89,7 @@
   list(loss = loss, acc = acc, auc = auc)
 }
 
+#' Train one neural network with validation and early stopping
 #'
 #' Train one network from scratch on (x_mat, y_int), holding out a stratified
 #' validation split each call. Tracks validation loss per epoch, keeps a copy
@@ -208,8 +208,9 @@
   list(net = net, history = history, best_epoch = best_epoch, best_val_loss = best_val_loss)
 }
 
+#' Calculate softmax probabilities from a forward pass
+#'
 #' @keywords internal
-#' Forward pass -> softmax probabilities as a plain R matrix (cells x classes).
 .dl_predict_probs <- function(net, x_mat) {
   x_t <- torch::torch_tensor(as.matrix(x_mat), dtype = torch::torch_float())
   net$eval()
@@ -232,7 +233,7 @@
 #' @param label_col Character scalar naming the label column in
 #'   \code{colData(spe)} (default \code{"cutoff_label"}).
 #' @param assay_name Character scalar naming the assay used as features
-#'   (default \code{"norm"}).
+#'   (default \code{"exprs"}).
 #' @param unknown_label Character label treated as unlabeled and excluded from
 #'   training/cleaning (default \code{"Unknown"}).
 #' @param features Character vector of feature (marker) names to use, or
@@ -279,7 +280,7 @@
 #' @export
 train_custom_dl <- function(spe,
                             label_col = "cutoff_label",
-                            assay_name = "norm",
+                            assay_name = "exprs",
                             unknown_label = "Unknown",
                             features = "all",
                             hidden_dims = c(64, 32),
@@ -306,9 +307,6 @@ train_custom_dl <- function(spe,
   }
   .assert_spe(spe)
 
-
-
-  # 1. Feature prep -- identical to train_custom_randomforest
   feat_mat_all <- SummarizedExperiment::assay(spe, assay_name)
   features_use <- if (length(features) == 1 && features == "all") {
     rownames(feat_mat_all)
@@ -339,7 +337,6 @@ train_custom_dl <- function(spe,
   n_classes <- length(class_levels)
   rownames(core_df) <- rownames(feature_df)[core_idx]
 
-  # 2. Scale features -- neural nets need this, ranger doesn't.
   #    Fit scaling on the full core set; reused for CV folds, final fit, and
   #    at prediction time (stored inside the returned model object).
   scale_stats <- .dl_scale_fit(as.matrix(core_df))
@@ -401,7 +398,6 @@ train_custom_dl <- function(spe,
     }
   }
 
-  # 3. Consensus calculations -- identical logic to the RF version
   avg_core_prob_mat <- sum_prob_mat / repeats
   agreement_rate <- match_counts / repeats
 
@@ -411,7 +407,6 @@ train_custom_dl <- function(spe,
   new_labels[colnames(spe) %in% names(agreement_rate[agreement_rate < agreement_thresh])] <- unknown_label
   SummarizedExperiment::colData(spe)$cleaned_core_label <- new_labels
 
-  # 4. Final model training on cleaned cells only
   message(sprintf("Training final DL model on %d cleaned cells...", length(valid_names)))
   cleaned_mat <- core_mat_scaled[valid_names, , drop = FALSE]
   cleaned_y   <- y_int[match(valid_names, rownames(core_df))]
@@ -469,7 +464,7 @@ train_custom_dl <- function(spe,
 #'
 #' @param spe A \code{SpatialExperiment} or \code{SingleCellExperiment}.
 #' @param model A \code{"cytoGateR_dl"} object, as returned by \code{train_custom_dl()$model}.
-#' @param assay_name Character scalar naming the assay used as features (default \code{"norm"}).
+#' @param assay_name Character scalar naming the assay used as features (default \code{"exprs"}).
 #' @param label_col Column in \code{colData(spe)} identifying which cells are unknown (default \code{"custom_label"}).
 #' @param out_col Column name to store the filled-in labels (default \code{"soft_tree_label_filled"}).
 #' @param pred_col Column name to store raw predictions for the unknown subset (default \code{"dl_pred"}).
@@ -482,7 +477,7 @@ train_custom_dl <- function(spe,
 #' @export
 predict_unknown_with_dl <- function(spe,
                                     model,
-                                    assay_name = "norm",
+                                    assay_name = "exprs",
                                     label_col = "custom_label",
                                     out_col = "soft_tree_label_filled",
                                     pred_col = "dl_pred",
@@ -493,7 +488,6 @@ predict_unknown_with_dl <- function(spe,
   .assert_spe(spe)
   if (!inherits(model, "cytoGateR_dl")) stop("model must be a 'cytoGateR_dl' object.")
 
-  # 1. Identify target cells
   labels <- SummarizedExperiment::colData(spe)[[label_col]]
   replace_idx <- is.na(labels) | labels == unknown_label
 
@@ -502,25 +496,21 @@ predict_unknown_with_dl <- function(spe,
     return(list(spe = spe, prob_mat = NULL))
   }
 
-  # 2. Prepare features ONLY for unknown cells, aligned to training feature order
   feat_mat <- SummarizedExperiment::assay(spe, assay_name)
   feature_df <- as.data.frame(t(feat_mat[, replace_idx, drop = FALSE]))
   feature_df <- feature_df[, model$feature_names, drop = FALSE]
 
   scaled_mat <- .dl_scale_apply(as.matrix(feature_df), model$center, model$scale)
 
-  # 3. Predict ONLY on unknowns
   prob_mat <- .dl_predict_probs(model$net, scaled_mat)
   dimnames(prob_mat) <- list(rownames(feature_df), model$class_levels)
 
-  # 4. Determine winners and confidence for the subset
   max_probs <- apply(prob_mat, 1, max)
   winning_indices <- apply(prob_mat, 1, which.max)
   raw_preds <- colnames(prob_mat)[winning_indices]
 
   final_preds_subset <- ifelse(max_probs >= threshold, raw_preds, unassigned_label)
 
-  # 5. Fill back into the full SPE -- identical bookkeeping to the RF version
   full_final_preds <- rep(NA_character_, ncol(spe))
   full_confidence <- rep(NA_character_, ncol(spe))
   filled <- labels

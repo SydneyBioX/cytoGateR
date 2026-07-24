@@ -7,7 +7,7 @@
 run_soft_gating(
   spe,
   lineage_table,
-  assay_name = "norm",
+  assay_name = "exprs",
   unknown_thresh = 0.4,
   store = TRUE
 )
@@ -17,7 +17,7 @@ run_soft_gating(
 
 \item{lineage_table}{Tibble with cell_type/pos_markers/neg_markers.}
 
-\item{assay_name}{Assay to use (default "norm").}
+\item{assay_name}{Assay to use (default "exprs").}
 
 \item{unknown_thresh}{Threshold for Unknown label (default 0.4).}
 

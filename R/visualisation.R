@@ -70,7 +70,7 @@ plot_marker_priority_tree <- function(lineage_table, marker_stats, cell_type_nam
 #'   label levels. If provided alongside `label_levels`, lengths must match.
 #' @param drop_levels Logical; if FALSE, keep unused levels in the legend.
 #'   Default FALSE.
-#' @param assay_name Assay name to pull values from. Default "norm".
+#' @param assay_name Assay name to pull values from. Default "exprs".
 #'
 #' @return A `ggplot` object.
 #' @export
@@ -86,7 +86,7 @@ plot_ct_marker_intensity <- function(spe,
                                      label_levels = NULL,
                                      label_colors = NULL,
                                      drop_levels = FALSE,
-                                     assay_name = "norm") {
+                                     assay_name = "exprs") {
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("Please install ggplot2 to use plot_ct_marker_intensity().")
   }
@@ -763,7 +763,7 @@ plot_label_confusion_matrix <- function(spe,
 #' @param spe A `SpatialExperiment`/`SingleCellExperiment` with the target assay
 #'   and metadata in `colData()`.
 #' @param marker Marker name to plot (must match a row in the assay).
-#' @param assay_name Assay name to pull values from. Default "counts".
+#' @param assay_name Assay name to pull values from. Default "exprs".
 #' @param image_col Column in `colData()` used to color densities. Default
 #'   "image_name".
 #' @param title Optional plot title. Defaults to "Density of \{marker\} (assay:
@@ -774,7 +774,7 @@ plot_label_confusion_matrix <- function(spe,
 #' @export
 plot_marker_density <- function(spe,
                                 marker,
-                                assay_name = "counts",
+                                assay_name = "exprs",
                                 image_col = "image_name",
                                 title = NULL,
                                 show_legend = FALSE) {
@@ -1527,7 +1527,7 @@ plot_label_dotplot <- function(spe,
 #' @param spe A `SpatialExperiment`/`SingleCellExperiment`.
 #' @param label_col Column in `colData(spe)` containing labels.
 #' @param lineage_table Tibble with cell_type/pos_markers/neg_markers.
-#' @param assay_name Assay name to pull values from. Default "norm".
+#' @param assay_name Assay name to pull values from. Default "exprs".
 #' @param cell_types Optional character vector to restrict label groups.
 #' @param marker_groups Which marker sets to include from lineage_table.
 #'   Default `c("pos_markers", "neg_markers")`.
@@ -1561,7 +1561,7 @@ plot_label_dotplot <- function(spe,
 plot_pseudobulk_heatmap <- function(spe,
                                     label_col,
                                     lineage_table = NULL,
-                                    assay_name = "norm",
+                                    assay_name = "exprs",
                                     cell_types = NULL,
                                     marker_groups = c("pos_markers", "neg_markers"),
                                     include_all_markers = TRUE,

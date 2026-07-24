@@ -2,11 +2,11 @@
 % Please edit documentation in R/deep_learning.R
 \name{.multiclass_auc}
 \alias{.multiclass_auc}
-\title{Macro-averaged one-vs-rest AUC across classes (probs: cells x classes, 1-indexed y_int).}
+\title{Macro-averaged one-vs-rest AUC across classes}
 \usage{
 .multiclass_auc(prob_mat, y_int, n_classes)
 }
 \description{
-Macro-averaged one-vs-rest AUC across classes (probs: cells x classes, 1-indexed y_int).
+Macro-averaged one-vs-rest AUC across classes
 }
 \keyword{internal}

@@ -5,14 +5,14 @@
 #'
 #' @param spe SpatialExperiment / SingleCellExperiment.
 #' @param markers Character vector of marker names.
-#' @param assay_name Assay to use (default "norm").
+#' @param assay_name Assay to use (default "exprs").
 #' @param min_n Minimum finite observations required to fit GMM (default 50).
 #'
 #' @return Named list. Each element is a list with fields:
 #'   valid, cutoff, scale, weight, mu_high.
 #'
 #' @export
-fit_marker_stats <- function(spe, markers, assay_name = "norm", min_n = 50L) {
+fit_marker_stats <- function(spe, markers, assay_name = "exprs", min_n = 50L) {
   .assert_spe(spe)
   if (!assay_name %in% SummarizedExperiment::assayNames(spe)) {
     stop("Assay '", assay_name, "' not found in spe.")
@@ -119,13 +119,13 @@ assign_soft_labels <- function(prob_mat, unknown_thresh = 0.4) {
 #' @param spe SpatialExperiment / SingleCellExperiment.
 #' @param marker_stats Output of fit_marker_stats().
 #' @param lineage_table Tibble with columns: cell_type, pos_markers (list), neg_markers (list).
-#' @param assay_name Assay to use (default "norm").
+#' @param assay_name Assay to use (default "exprs").
 #' @param neg_strength Penalty strength multiplier for negative markers (default 0.8).
 #'
 #' @return Numeric matrix [ncol(spe) x n_types].
 #' @export
 calculate_soft_scores <- function(spe, marker_stats, lineage_table,
-                                  assay_name = "norm",
+                                  assay_name = "exprs",
                                   neg_strength = 0.8) {
   .assert_spe(spe)
   .assert_lineage_table(lineage_table)

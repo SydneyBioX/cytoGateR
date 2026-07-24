@@ -7,7 +7,7 @@
 predict_unknown_with_knn(
   spe,
   knn_ref,
-  assay_name = "norm",
+  assay_name = "exprs",
   label_col = "cutoff_label",
   out_col = "knn_label_filled",
   pred_col = "knn_pred",
@@ -24,7 +24,7 @@ predict_unknown_with_knn(
 
 \item{knn_ref}{A list containing the reference data, labels, and features (from train_custom_knn).}
 
-\item{assay_name}{Name of the assay to use for features (default "norm").}
+\item{assay_name}{Name of the assay to use for features (default "exprs").}
 
 \item{label_col}{The original label column containing "Unknown" cells.}
 

@@ -7,7 +7,7 @@
 train_custom_knn(
   spe,
   label_col = "cutoff_label",
-  assay_name = "norm",
+  assay_name = "exprs",
   unknown_label = "Unknown",
   features = "all",
   cv_folds = 5,
@@ -28,7 +28,7 @@ containing cell data.}
 containing the initial cell type labels. Default is \code{"cutoff_label"}.}
 
 \item{assay_name}{Character string specifying the assay to use for marker
-expression. Default is \code{"norm"}.}
+expression. Default is \code{"exprs"}.}
 
 \item{unknown_label}{Character string specifying the label used to identify
 unknown or unclassified cells, which are excluded from training. Default is

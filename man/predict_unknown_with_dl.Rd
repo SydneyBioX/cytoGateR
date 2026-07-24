@@ -7,7 +7,7 @@
 predict_unknown_with_dl(
   spe,
   model,
-  assay_name = "norm",
+  assay_name = "exprs",
   label_col = "custom_label",
   out_col = "soft_tree_label_filled",
   pred_col = "dl_pred",
@@ -21,7 +21,7 @@ predict_unknown_with_dl(
 
 \item{model}{A \code{"cytoGateR_dl"} object, as returned by \code{train_custom_dl()$model}.}
 
-\item{assay_name}{Character scalar naming the assay used as features (default \code{"norm"}).}
+\item{assay_name}{Character scalar naming the assay used as features (default \code{"exprs"}).}
 
 \item{label_col}{Column in \code{colData(spe)} identifying which cells are unknown (default \code{"custom_label"}).}
 

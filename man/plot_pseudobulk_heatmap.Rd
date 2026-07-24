@@ -8,7 +8,7 @@ plot_pseudobulk_heatmap(
   spe,
   label_col,
   lineage_table = NULL,
-  assay_name = "norm",
+  assay_name = "exprs",
   cell_types = NULL,
   marker_groups = c("pos_markers", "neg_markers"),
   include_all_markers = TRUE,
@@ -35,7 +35,7 @@ plot_pseudobulk_heatmap(
 
 \item{lineage_table}{Tibble with cell_type/pos_markers/neg_markers.}
 
-\item{assay_name}{Assay name to pull values from. Default "norm".}
+\item{assay_name}{Assay name to pull values from. Default "exprs".}
 
 \item{cell_types}{Optional character vector to restrict label groups.}
 

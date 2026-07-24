@@ -1,7 +1,7 @@
 Package: cytoGateR
 Type: Package
 Title: Marker-Aware Cell Type Annotation for Protein Imaging Data
-Version: 0.1.5
+Version: 0.99.0
 Authors@R: c(
     person("Matthew", "Li",
            email = "mali0328@uni.sydney.edu.au",
@@ -14,47 +14,57 @@ Authors@R: c(
            role = "aut"),
     person("Jean", "Yang",
            email = "jean.yang@sydney.edu.au",
-           role = "aut")
+           role = "aut"),
     person("Lijia", "Yu",
            email = "yulj2010@gmail.com",
            role = c("aut", "cre")
            ))
-Description: An R package for cell type annotation in low-marker protein imaging data (e.g., IMC and CODEX) using marker-aware gating and classification strategies.
+Description: Provides marker-aware gating and classification methods for cell
+    type annotation in spatial protein imaging data. The package constructs interpretable
+    cell-type gating hierarchies, quantifies annotation uncertainty, and supports
+    supervised prediction of cells that cannot be confidently gated. It operates
+    on SummarizedExperiment and SpatialExperiment objects to support interoperable
+    analysis of single-cell spatial proteomics data.
 License: GPL-2
 Encoding: UTF-8
-LazyData: true
 Depends:
     R (>= 4.1.0)
 Imports:
-    SummarizedExperiment,
-    SpatialExperiment,
-    mclust,
-    ggplot2,
-    dplyr,
-    tibble,
-    stats,
-    rlang,
-    igraph,
-    ggraph,
-    future,
-    furrr,
-    tidyr,
-    RColorBrewer,
-    pals,
-    ranger,
-    proxy,
     BiocParallel,
-    dbscan
+    dbscan,
+    dplyr,
+    furrr,
+    future,
+    ggplot2,
+    ggraph,
+    grDevices,
+    grid,
+    igraph,
+    mclust,
+    pals,
+    proxy,
+    ranger,
+    RColorBrewer,
+    rlang,
+    SpatialExperiment,
+    stats,
+    SummarizedExperiment,
+    tibble,
+    tidyr,
+    utils
 Suggests:
-    viridisLite,
-    knitr,
-    rmarkdown,
-    quarto,
-    tidyverse,
-    imcdatasets,
-    simpleSeg,
-    ggpubr,
     forcats,
+    ggpubr,
+    imcdatasets,
+    knitr,
+    quarto,
+    rmarkdown,
+    simpleSeg,
+    tidyverse,
     torch
 VignetteBuilder: quarto
+SystemRequirements: Quarto command-line interface
+biocViews: CellBasedAssays, Classification, ImmunoOncology, SingleCell, Spatial
+URL: https://github.com/SydneyBioX/cytoGateR
+BugReports: https://github.com/SydneyBioX/cytoGateR/issues
 Config/roxygen2/version: 8.0.0

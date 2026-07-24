@@ -155,7 +155,7 @@ custom_labels <- function(spe,
 #' @param label_col Character scalar naming the label column in
 #'   \code{colData(spe)} (default \code{"cutoff_label"}).
 #' @param assay_name Character scalar naming the assay used as features
-#'   (default \code{"norm"}).
+#'   (default \code{"exprs"}).
 #' @param unknown_label Character label treated as unlabeled and excluded from
 #'   training/cleaning (default \code{"Unknown"}).
 #' @param num.trees Integer number of trees for the final \code{ranger} model
@@ -204,7 +204,7 @@ custom_labels <- function(spe,
 #' @export
 train_custom_randomforest <- function(spe,
                                       label_col = "cutoff_label",
-                                      assay_name = "norm",
+                                      assay_name = "exprs",
                                       unknown_label = "Unknown",
                                       num.trees = 200,
                                       mtry = NULL,
@@ -458,7 +458,7 @@ label_agreement_rates <- function(spe,
 #'   The model should be trained with \code{probability = TRUE} to enable
 #'   threshold-based filtering.
 #' @param assay_name Character scalar specifying which assay to use as feature
-#'   input (default \code{"norm"}).
+#'   input (default \code{"exprs"}).
 #' @param label_col Character scalar naming the existing label column in
 #'   \code{colData(spe)} (default \code{"custom_label"}).
 #' @param out_col Character scalar naming the output column that will contain
@@ -489,7 +489,7 @@ label_agreement_rates <- function(spe,
 #' @export
 predict_unknown_with_randomforest <- function(spe,
                                               model,
-                                              assay_name = "norm",
+                                              assay_name = "exprs",
                                               label_col = "custom_label",
                                               out_col = "soft_tree_label_filled",
                                               pred_col = "rf_pred",
@@ -785,7 +785,7 @@ apply_cutoff_labels <- function(res,
 #' @param label_col Character string specifying the column in \code{colData(spe)}
 #'   containing the initial cell type labels. Default is \code{"cutoff_label"}.
 #' @param assay_name Character string specifying the assay to use for marker
-#'   expression. Default is \code{"norm"}.
+#'   expression. Default is \code{"exprs"}.
 #' @param unknown_label Character string specifying the label used to identify
 #'   unknown or unclassified cells, which are excluded from training. Default is
 #'   \code{"Unknown"}.
@@ -833,7 +833,7 @@ apply_cutoff_labels <- function(res,
 #' @export
 train_custom_knn <- function(spe,
                              label_col = "cutoff_label",
-                             assay_name = "norm",
+                             assay_name = "exprs",
                              unknown_label = "Unknown",
                              features = "all",
                              cv_folds = 5,
@@ -942,7 +942,7 @@ train_custom_knn <- function(spe,
 #'
 #' @param spe A SpatialExperiment or SingleCellExperiment object.
 #' @param knn_ref A list containing the reference data, labels, and features (from train_custom_knn).
-#' @param assay_name Name of the assay to use for features (default "norm").
+#' @param assay_name Name of the assay to use for features (default "exprs").
 #' @param label_col The original label column containing "Unknown" cells.
 #' @param out_col Output column name for filled labels.
 #' @param pred_col Column name for raw kNN predictions.
@@ -957,7 +957,7 @@ train_custom_knn <- function(spe,
 #' @export
 predict_unknown_with_knn <- function(spe,
                                      knn_ref,
-                                     assay_name = "norm",
+                                     assay_name = "exprs",
                                      label_col = "cutoff_label",
                                      out_col = "knn_label_filled",
                                      pred_col = "knn_pred",

@@ -7,7 +7,7 @@
 plot_marker_density(
   spe,
   marker,
-  assay_name = "counts",
+  assay_name = "exprs",
   image_col = "image_name",
   title = NULL,
   show_legend = FALSE
@@ -19,7 +19,7 @@ and metadata in `colData()`.}
 
 \item{marker}{Marker name to plot (must match a row in the assay).}
 
-\item{assay_name}{Assay name to pull values from. Default "counts".}
+\item{assay_name}{Assay name to pull values from. Default "exprs".}
 
 \item{image_col}{Column in `colData()` used to color densities. Default
 "image_name".}

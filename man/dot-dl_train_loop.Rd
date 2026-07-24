@@ -2,13 +2,7 @@
 % Please edit documentation in R/deep_learning.R
 \name{.dl_train_loop}
 \alias{.dl_train_loop}
-\title{Train one network from scratch on (x_mat, y_int), holding out a stratified
-validation split each call. Tracks validation loss per epoch, keeps a copy
-of the weights from the best epoch, restores them before returning, and
-optionally stops early if validation loss hasn't improved for `patience`
-epochs. y_int must be 1-indexed (1..n_classes) -- torch-for-R's cross-
-entropy/nll losses require class targets starting at 1, not 0, despite the
-underlying Python-ported docs saying [0, C-1].}
+\title{Train one neural network with validation and early stopping}
 \usage{
 .dl_train_loop(
   x_mat,
@@ -27,6 +21,15 @@ underlying Python-ported docs saying [0, C-1].}
 )
 }
 \description{
+Train one network from scratch on (x_mat, y_int), holding out a stratified
+validation split each call. Tracks validation loss per epoch, keeps a copy
+of the weights from the best epoch, restores them before returning, and
+optionally stops early if validation loss hasn't improved for `patience`
+epochs. y_int must be 1-indexed (1..n_classes) -- torch-for-R's cross-
+entropy/nll losses require class targets starting at 1, not 0, despite the
+underlying Python-ported docs saying [0, C-1].
+}
+\details{
 Returns a list: net (best-epoch weights, in eval() mode), history
 (per-epoch train/valid loss+acc+auc data.frame), best_epoch, best_val_loss.
 }

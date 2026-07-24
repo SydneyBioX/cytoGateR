@@ -2,11 +2,11 @@
 % Please edit documentation in R/deep_learning.R
 \name{.binary_auc}
 \alias{.binary_auc}
-\title{Simple rank-based (Mann-Whitney) binary AUC, no external dependency.}
+\title{Simple rank-based binary AUC}
 \usage{
 .binary_auc(scores, labels_binary)
 }
 \description{
-Simple rank-based (Mann-Whitney) binary AUC, no external dependency.
+Simple rank-based binary AUC
 }
 \keyword{internal}

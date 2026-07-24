@@ -2,11 +2,11 @@
 % Please edit documentation in R/deep_learning.R
 \name{.dl_eval_pass}
 \alias{.dl_eval_pass}
-\title{One eval-mode forward pass: returns loss, accuracy, macro OVR AUC for (x, y).}
+\title{Run one evaluation-mode forward pass}
 \usage{
 .dl_eval_pass(net, loss_fn, x, y_tensor, y_int_r, n_classes)
 }
 \description{
-One eval-mode forward pass: returns loss, accuracy, macro OVR AUC for (x, y).
+Run one evaluation-mode forward pass
 }
 \keyword{internal}
