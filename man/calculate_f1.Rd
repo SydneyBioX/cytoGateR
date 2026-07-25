@@ -19,3 +19,9 @@ A data frame with Precision, Recall, and F1 score per type
 \description{
 Calculate F1 Score per Cell Type
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+calculate_f1(spe, ref_col = "cell_type", pred_col = "knn_label")
+}

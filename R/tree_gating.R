@@ -7,6 +7,11 @@
 #' @param gmm_model_names Optional character vector of model names to pass to
 #'   [mclust::Mclust()] (e.g., "V" to forbid equal-variance in 1D).
 #' @return list with GMM parameters or NULL
+#' @examples
+#' set.seed(1)
+#' x <- c(rnorm(50, 0, 0.2), rnorm(50, 2, 0.2))
+#' fit <- fit_gmm_2(x)
+#' fit$cutoff
 #' @export
 fit_gmm_2 <- function(x,
                       cutoff_method = c("mean", "equal_posteriors"),
@@ -82,6 +87,10 @@ gmm_equal_posterior_cutoff <- function(mu1, mu2, s1, s2, p1, p2) {
 #' Marker separability
 #' @param x numeric
 #' @return numeric
+#' @examples
+#' set.seed(1)
+#' x <- c(rnorm(50, 0, 0.2), rnorm(50, 2, 0.2))
+#' marker_separability(x)
 #' @export
 marker_separability <- function(x) {
   fit <- fit_gmm_2(x)
@@ -95,6 +104,8 @@ marker_separability <- function(x) {
 #' @param cutoff numeric
 #' @param scale numeric
 #' @return numeric in [0,1]
+#' @examples
+#' score_marker_logistic(c(0, 1, 2), cutoff = 1, scale = 0.5)
 #' @export
 score_marker_logistic <- function(x, cutoff, scale) {
   stats::plogis((x - cutoff) / scale)
@@ -104,6 +115,8 @@ score_marker_logistic <- function(x, cutoff, scale) {
 #'
 #' @param x numeric
 #' @return numeric in [0,1]
+#' @examples
+#' score_marker_rank(c(3, 1, 2, NA))
 #' @export
 score_marker_rank <- function(x) {
   r <- rank(x, ties.method = "average", na.last = "keep")
@@ -124,6 +137,20 @@ score_marker_rank <- function(x) {
 #' @param gmm_model_names Optional character vector of model names to pass to
 #'   [mclust::Mclust()] (e.g., "V" to forbid equal-variance in 1D).
 #' @return tree object
+#' @examples
+#' set.seed(1)
+#' expr_mat <- rbind(
+#'   CD3 = c(rnorm(50, 0, 0.2), rnorm(50, 2, 0.2)),
+#'   CD20 = c(rnorm(50, 2, 0.2), rnorm(50, 0, 0.2))
+#' )
+#' tree <- build_fullcoverage_tree(
+#'   expr_mat,
+#'   markers_pos = c("CD3", "CD20"),
+#'   max_depth = 2,
+#'   min_cells = 20,
+#'   min_score = 0.1
+#' )
+#' tree$type
 #' @export
 build_fullcoverage_tree <- function(expr_mat,
                                     markers_pos,
@@ -232,6 +259,13 @@ build_fullcoverage_tree <- function(expr_mat,
 #'
 #' @return A numeric vector of per-node scores (may contain `NA_real_` if a marker value
 #'   is not finite for that cell).
+#' @examples
+#' tree <- list(
+#'   type = "node", marker = "CD3", cutoff = 1, scale = 0.5,
+#'   left = list(type = "leaf"), right = list(type = "leaf")
+#' )
+#' expr_mat <- rbind(CD3 = c(0.5, 1.5))
+#' collect_path_scores(tree, expr_mat, cell_i = 1)
 #' @export
 collect_path_scores <- function(tree, expr_mat, cell_i) {
   scores <- numeric(0)
@@ -287,6 +321,15 @@ collect_path_scores <- function(tree, expr_mat, cell_i) {
 #' If no valid negative markers are found in \code{marker_stats}, the function
 #' returns 1 (no penalty).
 #'
+#' @examples
+#' expr_mat <- rbind(CD3 = c(0.2, 2))
+#' marker_stats <- list(CD3 = list(cutoff = 1, scale = 0.5))
+#' neg_penalty(
+#'   expr_mat,
+#'   neg_markers = "CD3",
+#'   cell_i = 1,
+#'   marker_stats = marker_stats
+#' )
 #' @export
 neg_penalty <- function(expr_mat, neg_markers, cell_i, marker_stats = NULL, neg_strength = 0.8) {
   neg_markers <- intersect(neg_markers, names(marker_stats))
@@ -332,6 +375,13 @@ neg_penalty <- function(expr_mat, neg_markers, cell_i, marker_stats = NULL, neg_
 #'
 #' @return Numeric scalar probability (typically in [0,1]) or `NA_real_` if no
 #'   usable node scores are available for the cell.
+#' @examples
+#' tree <- list(
+#'   type = "node", marker = "CD3", cutoff = 1, scale = 0.5,
+#'   left = list(type = "leaf"), right = list(type = "leaf")
+#' )
+#' expr_mat <- rbind(CD3 = c(0.5, 1.5))
+#' tree_prob(tree, expr_mat, cell_i = 2)
 #' @export
 tree_prob <- function(tree, expr_mat, cell_i,
                       combine = c("mean", "product"),
@@ -354,4 +404,3 @@ tree_prob <- function(tree, expr_mat, cell_i,
   # base * neg_penalty(expr_mat, neg_markers, cell_i)
   (base * complexity_weight) * neg_penalty(expr_mat, neg_markers, cell_i, marker_stats, neg_strength)
 }
-

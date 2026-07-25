@@ -71,3 +71,30 @@ Feature columns are automatically aligned to match the variables used during
 model training. Only cells originally labeled as \code{NA} or
 \code{unknown_label} are replaced in the output column.
 }
+\examples{
+\donttest{
+data("cytoGateR_example", package = "cytoGateR")
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+fit <- train_custom_randomforest(
+  spe,
+  label_col = "core_group",
+  unknown_label = "Unassigned",
+  features = c("CD3e", "CD20", "CD4", "CD8a"),
+  num.trees = 25,
+  cv_folds = 2,
+  repeats = 1,
+  agreement_thresh = 0,
+  num_threads = 1,
+  seed = 1
+)
+prediction <- predict_unknown_with_randomforest(
+  fit$spe,
+  fit$model,
+  label_col = "cleaned_core_label",
+  unknown_label = "Unassigned",
+  threshold = 0.5
+)
+table(SummarizedExperiment::colData(prediction$spe)$soft_tree_label_filled)
+}
+}

@@ -59,3 +59,13 @@ Visualizes a marker distribution, optionally with a two-component GMM fit
 and cutoff overlays. Useful for QC and comparing marker behavior across
 groups.
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+spe <- cytoGateR_example[, seq_len(min(200L, ncol(cytoGateR_example)))]
+plot_ct_marker_intensity(
+  spe,
+  marker = rownames(spe)[1],
+  subtitle = "Example cells",
+  do_fit = FALSE
+)
+}

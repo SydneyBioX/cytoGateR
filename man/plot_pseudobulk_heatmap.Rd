@@ -88,3 +88,23 @@ A `ggplot` object.
 Computes mean marker expression per label group and plots a heatmap
 restricted to relevant markers defined in a lineage table.
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+spe <- cytoGateR_example
+labels <- unique(as.character(SummarizedExperiment::colData(spe)$knn_label))
+labels <- labels[!is.na(labels)][seq_len(min(2L, sum(!is.na(labels))))]
+markers <- rownames(spe)[seq_len(min(3L, nrow(spe)))]
+lineage <- data.frame(
+  cell_type = labels,
+  pos_markers = I(rep(list(markers), length(labels))),
+  neg_markers = I(rep(list(character()), length(labels)))
+)
+plot_pseudobulk_heatmap(
+  spe,
+  label_col = "knn_label",
+  lineage_table = lineage,
+  cell_types = labels,
+  include_all_markers = FALSE,
+  show_values = FALSE
+)
+}

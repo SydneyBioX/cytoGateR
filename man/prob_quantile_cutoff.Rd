@@ -17,3 +17,6 @@ Numeric scalar cutoff.
 \description{
 Computes a per-vector cutoff using the specified quantile.
 }
+\examples{
+prob_quantile_cutoff(c(0.1, 0.2, 0.8, 0.9), prob = 0.75)
+}

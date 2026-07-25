@@ -7,6 +7,17 @@
 #' @param store Store results back into spe (default TRUE).
 #'
 #' @return A list with: spe (if store=TRUE), marker_stats, prob_mat, labels.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' lineage_table <- data.frame(
+#'   cell_type = c("Tcell", "Bcell"),
+#'   pos_markers = I(list("CD3e", "CD20")),
+#'   neg_markers = I(list("CD20", "CD3e"))
+#' )
+#' soft_result <- run_soft_gating(spe, lineage_table)
+#' head(soft_result$labels)
 #' @export
 run_soft_gating <- function(spe, lineage_table,
                             assay_name = "exprs",
@@ -108,6 +119,25 @@ run_soft_gating <- function(spe, lineage_table,
 #' Trees are built with \code{build_fullcoverage_tree()} and evaluated with
 #' \code{tree_prob()}.
 #'
+#' @examples
+#' ### This is a minimal example, for the full example, please see vignettes
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' lineage_table <- data.frame(
+#'   cell_type = c("Tcell", "Bcell"),
+#'   pos_markers = I(list("CD3e", "CD20")),
+#'   neg_markers = I(list("CD20", "CD3e"))
+#' )
+#' tree_result <- run_tree_gating(
+#'   spe,
+#'   lineage_table,
+#'   max_depth = 1,
+#'   min_cells = 100,
+#'   min_score = 0.1,
+#'   workers = 1
+#' )
+#' head(tree_result$hard_label)
 #' @export
 run_tree_gating <- function(spe,
                             lineage_table,

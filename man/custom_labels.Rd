@@ -41,3 +41,22 @@ The input `spe` with a new `colData` column containing custom labels.
 Applies the confidence-based labelling scheme to a probability matrix and
 stores the resulting labels in `colData(spe)`.
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+prob_cols <- grep(
+  "^KNN_P_",
+  names(SummarizedExperiment::colData(spe)),
+  value = TRUE
+)
+prob_mat <- as.matrix(SummarizedExperiment::colData(spe)[, prob_cols])
+rownames(prob_mat) <- colnames(spe)
+colnames(prob_mat) <- sub("^KNN_P_", "", colnames(prob_mat))
+spe <- custom_labels(
+  spe,
+  prob_mat,
+  flag_fn = function(x) max(x) >= 0.8
+)
+table(SummarizedExperiment::colData(spe)$custom_label)
+}

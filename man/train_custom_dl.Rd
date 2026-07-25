@@ -102,3 +102,28 @@ flag unreliable labels (consensus cleaning), then a final network is
 trained on the cleaned labelled cells. Uses a small feedforward neural
 network (via the \code{torch} package) instead of \code{ranger}.
 }
+\examples{
+\donttest{
+if (requireNamespace("torch", quietly = TRUE) &&
+    torch::torch_is_installed()) {
+  data("cytoGateR_example", package = "cytoGateR")
+  image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+  spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+  dl_fit <- train_custom_dl(
+    spe,
+    label_col = "core_group",
+    unknown_label = "Unassigned",
+    features = c("CD3e", "CD20", "CD4", "CD8a"),
+    hidden_dims = 8,
+    epochs = 2,
+    batch_size = 256,
+    cv_folds = 2,
+    repeats = 1,
+    agreement_thresh = 0,
+    patience = 1,
+    seed = 1
+  )
+  dl_fit$training_history
+}
+}
+}

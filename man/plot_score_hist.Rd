@@ -49,3 +49,8 @@ Faceted histograms of per-cell probabilities for each cell type, using the
 probability columns already stored in `colData(spe)`
 (e.g., `P_T_cell`, `P_Tumor`).
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+spe <- cytoGateR_example
+plot_score_hist(list(spe = spe), binwidth = 0.1)
+}

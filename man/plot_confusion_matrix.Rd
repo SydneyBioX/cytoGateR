@@ -44,3 +44,11 @@ A `ggplot` object.
 Creates a heatmap with counts overlaid for a confusion matrix (table or
 matrix) of truth vs. predicted classes.
 }
+\examples{
+conf <- matrix(
+  c(18, 2, 3, 17),
+  nrow = 2,
+  dimnames = list(truth = c("A", "B"), predicted = c("A", "B"))
+)
+plot_confusion_matrix(conf)
+}

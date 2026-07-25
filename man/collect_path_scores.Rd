@@ -23,3 +23,11 @@ Traverse a gating tree for a single cell and compute node-wise marker scores
 along the deterministic path defined by comparing marker expression to each
 node's cutoff.
 }
+\examples{
+tree <- list(
+  type = "node", marker = "CD3", cutoff = 1, scale = 0.5,
+  left = list(type = "leaf"), right = list(type = "leaf")
+)
+expr_mat <- rbind(CD3 = c(0.5, 1.5))
+collect_path_scores(tree, expr_mat, cell_i = 1)
+}

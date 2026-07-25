@@ -46,3 +46,9 @@ a `ggplot` object
 \description{
 Plot the cell type probabilities of a random sample of cells
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+spe <- cytoGateR_example
+set.seed(1)
+plot_rand_cell_probs(spe, sample_size = 10)
+}

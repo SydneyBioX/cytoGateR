@@ -23,3 +23,16 @@ An hclust object representing the cell type hierarchy.
 \description{
 Build Lineage Hierarchy from Core Cells
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+SummarizedExperiment::colData(spe)$cleaned_core_label <-
+  SummarizedExperiment::colData(spe)$core_group
+SummarizedExperiment::colData(spe)$cleaned_core_label[
+  SummarizedExperiment::colData(spe)$cleaned_core_label == "Unassigned"
+] <- "Unknown"
+hc_tree <- build_lineage_hierarchy(spe)
+hc_tree$labels
+plot(hc_tree)
+}

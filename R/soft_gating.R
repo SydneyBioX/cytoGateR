@@ -11,6 +11,15 @@
 #' @return Named list. Each element is a list with fields:
 #'   valid, cutoff, scale, weight, mu_high.
 #'
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' marker_stats <- fit_marker_stats(
+#'   spe,
+#'   markers = c("CD3e", "CD20")
+#' )
+#' marker_stats
 #' @export
 fit_marker_stats <- function(spe, markers, assay_name = "exprs", min_n = 50L) {
   .assert_spe(spe)
@@ -97,6 +106,12 @@ fit_marker_stats <- function(spe, markers, assay_name = "exprs", min_n = 50L) {
 #' @param unknown_thresh If max prob < this, label as "Unknown" (default 0.4).
 #'
 #' @return Character vector of labels length nrow(prob_mat).
+#' @examples
+#' prob_mat <- rbind(
+#'   cell1 = c(Bcell = 0.8, Tcell = 0.2),
+#'   cell2 = c(Bcell = 0.3, Tcell = 0.35)
+#' )
+#' assign_soft_labels(prob_mat, unknown_thresh = 0.4)
 #' @export
 assign_soft_labels <- function(prob_mat, unknown_thresh = 0.4) {
   if (!is.matrix(prob_mat)) stop("prob_mat must be a matrix.")
@@ -123,6 +138,21 @@ assign_soft_labels <- function(prob_mat, unknown_thresh = 0.4) {
 #' @param neg_strength Penalty strength multiplier for negative markers (default 0.8).
 #'
 #' @return Numeric matrix [ncol(spe) x n_types].
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' lineage_table <- data.frame(
+#'   cell_type = c("Tcell", "Bcell"),
+#'   pos_markers = I(list("CD3e", "CD20")),
+#'   neg_markers = I(list("CD20", "CD3e"))
+#' )
+#' marker_stats <- fit_marker_stats(
+#'   spe,
+#'   markers = c("CD3e", "CD20")
+#' )
+#' prob_mat <- calculate_soft_scores(spe, marker_stats, lineage_table)
+#' head(prob_mat)
 #' @export
 calculate_soft_scores <- function(spe, marker_stats, lineage_table,
                                   assay_name = "exprs",

@@ -27,8 +27,32 @@ build_hierarchical_reference(
 
 \item{assay_name}{Assay to use (default "exprs").}
 
-\item{unknown_label}{haracter label for Unassigned cells (default "Unassigned").}
+\item{unknown_label}{Character label for unassigned cells (default "Unassigned").}
+}
+\value{
+A named list of node-specific references. Each element contains
+  training data, binary left/right labels, selected markers, and the lineage
+  members represented by each side of the node.
 }
 \description{
 Build Hierarchical Reference with Flexible Marker Selection
+}
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+SummarizedExperiment::colData(spe)$cleaned_core_label <-
+  SummarizedExperiment::colData(spe)$core_group
+SummarizedExperiment::colData(spe)$cleaned_core_label[
+  SummarizedExperiment::colData(spe)$cleaned_core_label == "Unassigned"
+] <- "Unknown"
+hc_tree <- build_lineage_hierarchy(spe)
+hier_ref <- build_hierarchical_reference(
+  spe,
+  hc_tree,
+  top_n = NULL,
+  unknown_label = "Unknown"
+)
+names(hier_ref)
+hier_ref[[1L]]$markers
 }

@@ -15,3 +15,8 @@ numeric
 \description{
 Marker separability
 }
+\examples{
+set.seed(1)
+x <- c(rnorm(50, 0, 0.2), rnorm(50, 2, 0.2))
+marker_separability(x)
+}

@@ -23,3 +23,13 @@ Named list. Each element is a list with fields:
 Fits a 2-component Gaussian Mixture Model (GMM) per marker and returns
 a list of per-marker stats (cutoff, scale, weight, mu_high, valid).
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+marker_stats <- fit_marker_stats(
+  spe,
+  markers = c("CD3e", "CD20")
+)
+marker_stats
+}

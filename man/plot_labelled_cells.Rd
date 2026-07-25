@@ -56,3 +56,13 @@ Takes cell labels and coordinates from a SpatialExperiment; can plot a single
 image or facet over multiple images with points colored by the provided
 label column.
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+spe <- cytoGateR_example
+plot_labelled_cells(
+  spe,
+  col_label = "knn_label",
+  image_col = "image_name",
+  image_index = 1
+)
+}

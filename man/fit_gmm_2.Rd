@@ -25,3 +25,9 @@ list with GMM parameters or NULL
 \description{
 Fit a 2-component Gaussian mixture model
 }
+\examples{
+set.seed(1)
+x <- c(rnorm(50, 0, 0.2), rnorm(50, 2, 0.2))
+fit <- fit_gmm_2(x)
+fit$cutoff
+}

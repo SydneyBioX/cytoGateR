@@ -20,3 +20,16 @@ A ggraph/ggplot object (requires igraph + ggraph).
 This is a simple visualization: markers ordered by weight and connected
 as a chain ROOT -> marker1 -> marker2 -> ...
 }
+\examples{
+markers <- c("CD3e", "CD20")
+lineage <- data.frame(
+  cell_type = "Immune",
+  pos_markers = I(list(markers)),
+  neg_markers = I(list(character()))
+)
+marker_stats <- list(
+  CD3e = list(weight = 0.9),
+  CD20 = list(weight = 0.7)
+)
+plot_marker_priority_tree(lineage, marker_stats, "Immune")
+}

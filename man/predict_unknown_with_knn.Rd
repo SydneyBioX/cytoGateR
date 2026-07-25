@@ -52,3 +52,30 @@ This function takes a SpatialExperiment object and a trained kNN reference
 to predict labels for "Unknown" or NA cells. It returns the updated SPE
 and a probability matrix for the predicted cells only.
 }
+\examples{
+\donttest{
+data("cytoGateR_example", package = "cytoGateR")
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+knn_ref <- train_custom_knn(
+  spe,
+  label_col = "core_group",
+  unknown_label = "Unassigned",
+  features = c("CD3e", "CD20", "CD4", "CD8a"),
+  cv_folds = 2,
+  repeats = 1,
+  agreement_thresh = 0.5,
+  k = 3,
+  seed = 1
+)
+prediction <- predict_unknown_with_knn(
+  knn_ref$spe,
+  knn_ref,
+  label_col = "cleaned_core_label",
+  unknown_label = "Unassigned",
+  threshold = 0.5,
+  k = 3
+)
+head(SummarizedExperiment::colData(prediction$spe)$knn_label_filled)
+}
+}

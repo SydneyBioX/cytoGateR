@@ -31,3 +31,19 @@ Computes a probability matrix [cells x cell_types] by combining
 per-marker logistic scores weighted by separability, with optional
 negative-marker penalties.
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+lineage_table <- data.frame(
+  cell_type = c("Tcell", "Bcell"),
+  pos_markers = I(list("CD3e", "CD20")),
+  neg_markers = I(list("CD20", "CD3e"))
+)
+marker_stats <- fit_marker_stats(
+  spe,
+  markers = c("CD3e", "CD20")
+)
+prob_mat <- calculate_soft_scores(spe, marker_stats, lineage_table)
+head(prob_mat)
+}

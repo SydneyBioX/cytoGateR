@@ -59,7 +59,10 @@ Suggests:
     knitr,
     quarto,
     rmarkdown,
+    S4Vectors,
     simpleSeg,
+    SingleCellExperiment,
+    testthat (>= 3.0.0),
     tidyverse,
     torch
 VignetteBuilder: quarto
@@ -68,3 +71,4 @@ biocViews: CellBasedAssays, Classification, ImmunoOncology, SingleCell, Spatial
 URL: https://github.com/SydneyBioX/cytoGateR
 BugReports: https://github.com/SydneyBioX/cytoGateR/issues
 Config/roxygen2/version: 8.0.0
+Config/testthat/edition: 3

@@ -1,0 +1,146 @@
+---
+title: "Tree Gating and Visualisation"
+author: "cytoGateR authors"
+vignette: >
+  %\VignetteIndexEntry{2. Tree Gating and Visualisation}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+format:
+  html:
+    toc: true
+    number-sections: true
+execute:
+  warning: false
+  message: false
+---
+
+# Overview
+
+This vignette demonstrates an interpretable tree-gating workflow on one
+complete image from `cytoGateR_example`. A small two-lineage marker table keeps
+the build fast while exercising the same functions used by larger analyses.
+
+```{r}
+library(cytoGateR)
+data("cytoGateR_example", package = "cytoGateR")
+
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+spe
+```
+
+# Define a lineage table
+
+Each row defines a cell type using positive and negative protein markers.
+Marker columns are list-columns so that each cell type may use a different
+number of markers.
+
+```{r}
+lineage_table <- data.frame(
+  cell_type = c("Tcell", "Bcell"),
+  pos_markers = I(list("CD3e", "CD20")),
+  neg_markers = I(list("CD20", "CD3e"))
+)
+lineage_table
+```
+
+# Fit tree-gating models
+
+For package-build speed, the example limits each tree to one split. Larger
+analyses can increase `max_depth` and use more detailed marker definitions.
+
+```{r}
+tree_result <- run_tree_gating(
+  spe,
+  lineage_table,
+  assay_name = "exprs",
+  max_depth = 1,
+  min_cells = 100,
+  min_score = 0.1,
+  uncert_thresh = 0.25,
+  workers = 1
+)
+```
+
+The result contains the updated object, fitted trees, probability matrix, hard
+labels, and cleaned lineage table:
+
+```{r}
+names(tree_result)
+head(tree_result$prob_mat)
+table(tree_result$hard_label)
+```
+
+# Inspect the fitted trees
+
+```{r}
+print_celltype_tree(tree_result$trees$Tcell)
+plot_celltype_tree(tree_result$trees$Tcell)
+```
+
+# Select high-confidence cells
+
+`apply_cutoff_labels()` applies a cell-type-specific probability cutoff. A cell
+receives a reference label only when exactly one cell type passes its cutoff.
+
+```{r}
+core_result <- apply_cutoff_labels(
+  tree_result,
+  cutoff_fn = function(x) stats::quantile(x, 0.95, na.rm = TRUE),
+  label_col = "core_group",
+  unknown_label = "Unknown"
+)
+
+table(SummarizedExperiment::colData(core_result$spe)$core_group)
+```
+
+# Visualise expression and annotations
+
+Marker distributions help assess whether the selected markers separate the
+expected populations.
+
+```{r}
+plot_marker_density(
+  core_result$spe,
+  marker = "CD3e",
+  assay_name = "exprs",
+  image_col = "image_name"
+)
+```
+
+The gated labels can also be displayed in spatial coordinates:
+
+```{r}
+plot_labelled_cells(
+  core_result$spe,
+  col_label = "core_group",
+  image_col = "image_name"
+)
+```
+
+# Visualise stored full-workflow probabilities
+
+The packaged object contains probabilities from the full ten-lineage demo
+workflow. These provide a richer example for probability visualisation without
+rerunning the complete model during vignette construction.
+
+```{r}
+plot_probability_map(
+  spe,
+  cell_type = "Bcell",
+  image_col = "image_name"
+)
+```
+
+```{r}
+plot_label_counts(
+  spe,
+  label_col = "knn_label"
+)
+```
+
+# Session information
+
+```{r}
+sessionInfo()
+```

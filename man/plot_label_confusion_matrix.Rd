@@ -43,3 +43,8 @@ A `ggplot` object.
 Computes a confusion matrix for two label columns in `colData(spe)` and
 visualises it with counts overlaid.
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+spe <- cytoGateR_example
+plot_label_confusion_matrix(spe, "cell_type", "knn_label")
+}

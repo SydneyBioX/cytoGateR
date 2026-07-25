@@ -51,3 +51,13 @@ a smaller multiplicative factor).
 If no valid negative markers are found in \code{marker_stats}, the function
 returns 1 (no penalty).
 }
+\examples{
+expr_mat <- rbind(CD3 = c(0.2, 2))
+marker_stats <- list(CD3 = list(cutoff = 1, scale = 0.5))
+neg_penalty(
+  expr_mat,
+  neg_markers = "CD3",
+  cell_i = 1,
+  marker_stats = marker_stats
+)
+}

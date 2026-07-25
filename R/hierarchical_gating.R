@@ -6,7 +6,29 @@
 #' @param label_col Column with core labels (e.g., "cleaned_core_label").
 #' @param top_n Number of top DE markers to use per node. Set to NULL to use all markers.
 #' @param assay_name Assay to use (default "exprs").
-#' @param unknown_label haracter label for Unassigned cells (default "Unassigned").
+#' @param unknown_label Character label for unassigned cells (default "Unassigned").
+#'
+#' @return A named list of node-specific references. Each element contains
+#'   training data, binary left/right labels, selected markers, and the lineage
+#'   members represented by each side of the node.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' SummarizedExperiment::colData(spe)$cleaned_core_label <-
+#'   SummarizedExperiment::colData(spe)$core_group
+#' SummarizedExperiment::colData(spe)$cleaned_core_label[
+#'   SummarizedExperiment::colData(spe)$cleaned_core_label == "Unassigned"
+#' ] <- "Unknown"
+#' hc_tree <- build_lineage_hierarchy(spe)
+#' hier_ref <- build_hierarchical_reference(
+#'   spe,
+#'   hc_tree,
+#'   top_n = NULL,
+#'   unknown_label = "Unknown"
+#' )
+#' names(hier_ref)
+#' hier_ref[[1L]]$markers
 #' @export
 build_hierarchical_reference <- function(spe,
                                          hc_tree,
@@ -85,6 +107,18 @@ build_hierarchical_reference <- function(spe,
 #' @param assay_name Assay to use for pseudobulk calculation.
 #'
 #' @return An hclust object representing the cell type hierarchy.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' SummarizedExperiment::colData(spe)$cleaned_core_label <-
+#'   SummarizedExperiment::colData(spe)$core_group
+#' SummarizedExperiment::colData(spe)$cleaned_core_label[
+#'   SummarizedExperiment::colData(spe)$cleaned_core_label == "Unassigned"
+#' ] <- "Unknown"
+#' hc_tree <- build_lineage_hierarchy(spe)
+#' hc_tree$labels
+#' plot(hc_tree)
 #' @export
 build_lineage_hierarchy <- function(spe,
                                     label_col = "cleaned_core_label",

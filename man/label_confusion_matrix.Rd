@@ -22,3 +22,11 @@ A table with rows = `label_col1` levels and columns = `label_col2` levels.
 Builds a confusion matrix comparing two label columns in `colData(spe)`, with
 aligned levels so missing categories are represented.
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+label_confusion_matrix(
+  cytoGateR_example,
+  "cell_type_hard",
+  "knn_label"
+)
+}

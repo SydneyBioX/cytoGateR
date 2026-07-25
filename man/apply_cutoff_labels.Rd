@@ -37,3 +37,21 @@ into `colData(res$spe)`.
 A cell receives a label only if exactly one cell type passes its cutoff; if
 multiple (or zero) cell types pass, the cell is labeled `unknown_label`.
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+prob_cols <- grep(
+  "^KNN_P_",
+  names(SummarizedExperiment::colData(spe)),
+  value = TRUE
+)
+prob_mat <- as.matrix(SummarizedExperiment::colData(spe)[, prob_cols])
+rownames(prob_mat) <- colnames(spe)
+colnames(prob_mat) <- sub("^KNN_P_", "", colnames(prob_mat))
+result <- apply_cutoff_labels(
+  list(spe = spe, prob_mat = prob_mat),
+  cutoff_fn = function(x) 0.5
+)
+table(SummarizedExperiment::colData(result$spe)$cutoff_label)
+}

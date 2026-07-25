@@ -8,6 +8,18 @@
 #' @param cell_type_name Which cell type to plot.
 #'
 #' @return A ggraph/ggplot object (requires igraph + ggraph).
+#' @examples
+#' markers <- c("CD3e", "CD20")
+#' lineage <- data.frame(
+#'   cell_type = "Immune",
+#'   pos_markers = I(list(markers)),
+#'   neg_markers = I(list(character()))
+#' )
+#' marker_stats <- list(
+#'   CD3e = list(weight = 0.9),
+#'   CD20 = list(weight = 0.7)
+#' )
+#' plot_marker_priority_tree(lineage, marker_stats, "Immune")
 #' @export
 plot_marker_priority_tree <- function(lineage_table, marker_stats, cell_type_name) {
   .assert_lineage_table(lineage_table)
@@ -73,6 +85,15 @@ plot_marker_priority_tree <- function(lineage_table, marker_stats, cell_type_nam
 #' @param assay_name Assay name to pull values from. Default "exprs".
 #'
 #' @return A `ggplot` object.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' spe <- cytoGateR_example[, seq_len(min(200L, ncol(cytoGateR_example)))]
+#' plot_ct_marker_intensity(
+#'   spe,
+#'   marker = rownames(spe)[1],
+#'   subtitle = "Example cells",
+#'   do_fit = FALSE
+#' )
 #' @export
 plot_ct_marker_intensity <- function(spe,
                                      marker,
@@ -277,6 +298,15 @@ plot_ct_marker_intensity <- function(spe,
 #' @param point_size Size of points.
 #'
 #' @return A ggplot object.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' spe <- cytoGateR_example
+#' plot_probability_map(
+#'   spe,
+#'   cell_type = "Tumor",
+#'   image_col = "image_name",
+#'   image_index = 1
+#' )
 #' @export
 plot_probability_map <- function(spe,
                                  cell_type,
@@ -375,6 +405,14 @@ plot_probability_map <- function(spe,
 #' @param indent String used internally for indentation during recursive printing.
 #'
 #' @return Invisibly returns `NULL`.
+#' @examples
+#' tree <- list(
+#'   type = "node", depth = 0, cells = 1:6, marker = "CD3e",
+#'   cutoff = 0.5, sep_score = 0.8,
+#'   left = list(type = "leaf", depth = 1, cells = 1:3),
+#'   right = list(type = "leaf", depth = 1, cells = 4:6)
+#' )
+#' print_celltype_tree(tree)
 #' @export
 print_celltype_tree <- function(node, indent = "") {
   if (node$type == "leaf") {
@@ -413,6 +451,14 @@ print_celltype_tree <- function(node, indent = "") {
 #' @param id Node id for the current subtree (used internally for recursion).
 #'
 #' @return A tibble with columns `id`, `parent`, `type`, `label`.
+#' @examples
+#' tree <- list(
+#'   type = "node", depth = 0, cells = 1:6, marker = "CD3e",
+#'   cutoff = 0.5, sep_score = 0.8,
+#'   left = list(type = "leaf", depth = 1, cells = 1:3),
+#'   right = list(type = "leaf", depth = 1, cells = 4:6)
+#' )
+#' tree_to_df(tree)
 #' @export
 
 tree_to_df <- function(node, parent = NA_character_, id = "root") {
@@ -447,6 +493,14 @@ tree_to_df <- function(node, parent = NA_character_, id = "root") {
 #' @param title Plot title string.
 #'
 #' @return A `ggplot` object.
+#' @examples
+#' tree <- list(
+#'   type = "node", depth = 0, cells = 1:6, marker = "CD3e",
+#'   cutoff = 0.5, sep_score = 0.8,
+#'   left = list(type = "leaf", depth = 1, cells = 1:3),
+#'   right = list(type = "leaf", depth = 1, cells = 4:6)
+#' )
+#' plot_celltype_tree(tree, title = "Example gating tree")
 #' @export
 plot_celltype_tree <- function(tree, title = "") {
   df <- tree_to_df(tree)
@@ -461,7 +515,7 @@ plot_celltype_tree <- function(tree, title = "") {
     ggraph::geom_edge_elbow() +
     ggraph::geom_node_label(aes(label = .data$label),
                             size = 3,
-                            label.size = 0.2,
+                            linewidth = 0.2,
                             fill = "white") +
     ggplot2::theme_void() +
     ggplot2::ggtitle(title)
@@ -487,6 +541,13 @@ plot_celltype_tree <- function(tree, title = "") {
 #' @param plot_marginals Logical. If `TRUE`, add an extra "TOTAL" row/column showing marginal
 #'   totals and the grand total.
 #' @return A `ggplot` object.
+#' @examples
+#' conf <- matrix(
+#'   c(18, 2, 3, 17),
+#'   nrow = 2,
+#'   dimnames = list(truth = c("A", "B"), predicted = c("A", "B"))
+#' )
+#' plot_confusion_matrix(conf)
 #' @export
 plot_confusion_matrix <- function(conf_mat,
                                   title = "Confusion matrix",
@@ -594,6 +655,10 @@ plot_confusion_matrix <- function(conf_mat,
 #' @param show_legend Logical; show legend for bars. Default FALSE.
 #'
 #' @return A `ggplot` object.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' spe <- cytoGateR_example
+#' plot_label_counts(spe, label_col = "knn_label")
 #' @export
 plot_label_counts <- function(spe,
                               label_col,
@@ -656,6 +721,10 @@ plot_label_counts <- function(spe,
 #' @param subtitle Optional subtitle.
 #'
 #' @return A `ggplot` object.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' spe <- cytoGateR_example
+#' plot_label_agreement(spe, "cell_type", "knn_label")
 #' @export
 plot_label_agreement <- function(spe,
                                  label_col1,
@@ -718,6 +787,10 @@ plot_label_agreement <- function(spe,
 #'   (right side and top) of the confusion matrix. Default FALSE.
 #'
 #' @return A `ggplot` object.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' spe <- cytoGateR_example
+#' plot_label_confusion_matrix(spe, "cell_type", "knn_label")
 #' @export
 plot_label_confusion_matrix <- function(spe,
                                         label_col1,
@@ -771,6 +844,14 @@ plot_label_confusion_matrix <- function(spe,
 #' @param show_legend Logical; whether to show the legend. Default `FALSE`.
 #'
 #' @return A `ggplot` object.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' spe <- cytoGateR_example
+#' plot_marker_density(
+#'   spe,
+#'   marker = rownames(spe)[1],
+#'   image_col = "image_name"
+#' )
 #' @export
 plot_marker_density <- function(spe,
                                 marker,
@@ -829,6 +910,15 @@ plot_marker_density <- function(spe,
 #' @param title Plot title.
 #' @param subtitle Optional subtitle for the plot. If `NULL`, an automatic
 #' @return A `ggplot` object.
+#' @examples
+#' metrics <- data.frame(
+#'   class = c("Tumor", "Stroma"),
+#'   precision = c(0.90, 0.82),
+#'   recall = c(0.85, 0.88),
+#'   f1 = c(0.87, 0.85),
+#'   support = c(60, 40)
+#' )
+#' plot_class_metrics(metrics)
 #' @export
 plot_class_metrics <- function(class_metrics, title = "Per-class precision/recall/F1", subtitle = NULL) {
   if (!requireNamespace("ggplot2", quietly = TRUE) ||
@@ -911,6 +1001,11 @@ plot_class_metrics <- function(class_metrics, title = "Per-class precision/recal
 #'   (max(base_thresh, Q3 + iqr_mult * IQR)).
 #'
 #' @return a `ggplot` object
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' spe <- cytoGateR_example
+#' set.seed(1)
+#' plot_rand_cell_probs(spe, sample_size = 10)
 #' @export
 plot_rand_cell_probs <- function(spe = NULL,
                                  image_index = 1,
@@ -1067,6 +1162,10 @@ plot_rand_cell_probs <- function(spe = NULL,
 #'   Default FALSE.
 #'
 #' @return A `ggplot` object with faceted histograms.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' spe <- cytoGateR_example
+#' plot_score_hist(list(spe = spe), binwidth = 0.1)
 #' @export
 plot_score_hist <- function(res,
                            prob_prefix = "P_",
@@ -1225,6 +1324,13 @@ plot_score_hist <- function(res,
 #' @param ylab Y-axis label. Default "Cell count".
 #'
 #' @return A `ggplot` object showing counts per cardinality.
+#' @examples
+#' label_mat <- matrix(
+#'   c(TRUE, FALSE, TRUE, TRUE, FALSE, FALSE),
+#'   nrow = 3,
+#'   dimnames = list(NULL, c("Tumor", "Stroma"))
+#' )
+#' plot_label_cardinality(label_mat)
 #' @export
 plot_label_cardinality <- function(label_mat,
                                    title = "Positive labels per cell",
@@ -1285,6 +1391,15 @@ plot_label_cardinality <- function(label_mat,
 #'   single image (first selected). Default TRUE.
 #'
 #' @return `ggplot` object
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' spe <- cytoGateR_example
+#' plot_labelled_cells(
+#'   spe,
+#'   col_label = "knn_label",
+#'   image_col = "image_name",
+#'   image_index = 1
+#' )
 #' @export
 plot_labelled_cells <- function(spe,
                                 col_label,
@@ -1426,6 +1541,10 @@ plot_labelled_cells <- function(spe,
 #' @param show_legend Logical; show legend. Default TRUE.
 #'
 #' @return A `ggplot` object.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' spe <- cytoGateR_example
+#' plot_label_dotplot(spe, c("cell_type", "cell_type_hard", "knn_label"))
 #' @export
 plot_label_dotplot <- function(spe,
                                label_cols,
@@ -1557,6 +1676,25 @@ plot_label_dotplot <- function(spe,
 #' @param text_size Numeric. Text size for numeric values drawn on heatmap tiles
 #'
 #' @return A `ggplot` object.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' spe <- cytoGateR_example
+#' labels <- unique(as.character(SummarizedExperiment::colData(spe)$knn_label))
+#' labels <- labels[!is.na(labels)][seq_len(min(2L, sum(!is.na(labels))))]
+#' markers <- rownames(spe)[seq_len(min(3L, nrow(spe)))]
+#' lineage <- data.frame(
+#'   cell_type = labels,
+#'   pos_markers = I(rep(list(markers), length(labels))),
+#'   neg_markers = I(rep(list(character()), length(labels)))
+#' )
+#' plot_pseudobulk_heatmap(
+#'   spe,
+#'   label_col = "knn_label",
+#'   lineage_table = lineage,
+#'   cell_types = labels,
+#'   include_all_markers = FALSE,
+#'   show_values = FALSE
+#' )
 #' @export
 plot_pseudobulk_heatmap <- function(spe,
                                     label_col,
@@ -1660,7 +1798,10 @@ plot_pseudobulk_heatmap <- function(spe,
   summary_df <- df |>
     dplyr::group_by(.data[[label_col]]) |>
     dplyr::summarise(
-      dplyr::across(dplyr::where(is.numeric), mean, na.rm = TRUE),
+      dplyr::across(
+        dplyr::where(is.numeric),
+        function(x) mean(x, na.rm = TRUE)
+      ),
       .groups = "drop"
     )
 

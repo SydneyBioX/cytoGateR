@@ -97,3 +97,23 @@ During consensus cleaning, models are trained without probability estimation.
 The final model is trained with \code{probability = TRUE} to support downstream
 thresholding workflows.
 }
+\examples{
+\donttest{
+data("cytoGateR_example", package = "cytoGateR")
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+fit <- train_custom_randomforest(
+  spe,
+  label_col = "core_group",
+  unknown_label = "Unassigned",
+  features = c("CD3e", "CD20", "CD4", "CD8a"),
+  num.trees = 25,
+  cv_folds = 2,
+  repeats = 1,
+  agreement_thresh = 0,
+  num_threads = 1,
+  seed = 1
+)
+fit$model
+}
+}

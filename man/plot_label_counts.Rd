@@ -33,3 +33,8 @@ A `ggplot` object.
 Horizontal bar plot of label counts with count annotations. Useful for
 quickly checking class balance in `colData()` label columns.
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+spe <- cytoGateR_example
+plot_label_counts(spe, label_col = "knn_label")
+}

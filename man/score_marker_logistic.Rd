@@ -19,3 +19,6 @@ numeric in [0,1]
 \description{
 Logistic marker score
 }
+\examples{
+score_marker_logistic(c(0, 1, 2), cutoff = 1, scale = 0.5)
+}

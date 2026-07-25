@@ -47,3 +47,11 @@ Compute the probability that a single cell belongs to a given cell type by
 combining per-node scores along a tree path, applying a complexity-based
 weight, and an optional negative marker penalty.
 }
+\examples{
+tree <- list(
+  type = "node", marker = "CD3", cutoff = 1, scale = 0.5,
+  left = list(type = "leaf"), right = list(type = "leaf")
+)
+expr_mat <- rbind(CD3 = c(0.5, 1.5))
+tree_prob(tree, expr_mat, cell_i = 2)
+}

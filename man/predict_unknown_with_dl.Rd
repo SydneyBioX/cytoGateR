@@ -46,3 +46,35 @@ Drop-in deep-learning counterpart to
 currently labelled \code{unknown_label} (or \code{NA}) and fills in
 predictions above \code{threshold}.
 }
+\examples{
+\donttest{
+if (requireNamespace("torch", quietly = TRUE) &&
+    torch::torch_is_installed()) {
+  data("cytoGateR_example", package = "cytoGateR")
+  image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+  spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+  dl_fit <- train_custom_dl(
+    spe,
+    label_col = "core_group",
+    unknown_label = "Unassigned",
+    features = c("CD3e", "CD20", "CD4", "CD8a"),
+    hidden_dims = 8,
+    epochs = 2,
+    batch_size = 256,
+    cv_folds = 2,
+    repeats = 1,
+    agreement_thresh = 0,
+    patience = 1,
+    seed = 1
+  )
+  dl_prediction <- predict_unknown_with_dl(
+    dl_fit$spe,
+    dl_fit$model,
+    label_col = "cleaned_core_label",
+    unknown_label = "Unassigned",
+    threshold = 0.5
+  )
+  head(SummarizedExperiment::colData(dl_prediction$spe)$dl_pred)
+}
+}
+}

@@ -29,3 +29,11 @@ Given a logical/boolean label matrix (cells x cell types), counts how many
 labels are positive for each cell and plots the distribution from 0 up to
 the maximum observed positives.
 }
+\examples{
+label_mat <- matrix(
+  c(TRUE, FALSE, TRUE, TRUE, FALSE, FALSE),
+  nrow = 3,
+  dimnames = list(NULL, c("Tumor", "Stroma"))
+)
+plot_label_cardinality(label_mat)
+}

@@ -52,3 +52,35 @@ more memory. Default is \code{1000L}}
 \description{
 Recursive Hierarchical kNN with BiocParallel Ensemble
 }
+\examples{
+\donttest{
+data("cytoGateR_example", package = "cytoGateR")
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+SummarizedExperiment::colData(spe)$cleaned_core_label <-
+  SummarizedExperiment::colData(spe)$core_group
+SummarizedExperiment::colData(spe)$cleaned_core_label[
+  SummarizedExperiment::colData(spe)$cleaned_core_label == "Unassigned"
+] <- "Unknown"
+hc_tree <- build_lineage_hierarchy(
+  spe,
+  label_col = "cleaned_core_label"
+)
+hier_ref <- build_hierarchical_reference(
+  spe,
+  hc_tree,
+  label_col = "cleaned_core_label",
+  top_n = NULL,
+  unknown_label = "Unknown"
+)
+spe <- predict_hierarchical_knn_recursive(
+  spe,
+  hier_ref,
+  hc_tree,
+  repeats = 1,
+  dist_methods = "pearson",
+  k = 3
+)
+head(SummarizedExperiment::colData(spe)$hier_label)
+}
+}

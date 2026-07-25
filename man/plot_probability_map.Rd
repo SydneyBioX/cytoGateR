@@ -37,3 +37,13 @@ A ggplot object.
 Draws a spatial scatter plot colored by soft-gating probability
 for a given cell type (e.g., "T cell", "Tumor").
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+spe <- cytoGateR_example
+plot_probability_map(
+  spe,
+  cell_type = "Tumor",
+  image_col = "image_name",
+  image_index = 1
+)
+}

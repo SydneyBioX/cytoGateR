@@ -18,3 +18,18 @@ rf_metric_table(fit)
 Convenience helpers to expose overall metrics, cross-validation summaries,
 and per-class statistics in both tabular and text-friendly formats.
 }
+\examples{
+fit <- list(
+  metrics = list(
+    accuracy = 0.75,
+    f1_macro = 0.73,
+    cv_overall = data.frame(
+      accuracy = c(0.7, 0.8),
+      f1_macro = c(0.68, 0.78)
+    )
+  ),
+  test_truth = c("Bcell", "Bcell", "Tcell", "Tcell"),
+  test_pred = c("Bcell", "Tcell", "Tcell", "Tcell")
+)
+rf_metric_table(fit)
+}

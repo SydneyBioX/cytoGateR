@@ -37,3 +37,12 @@ Generates a density plot for a single marker using the specified assay, with
 curves colored by the image/sample column. Useful for quick QC of
 normalisation steps.
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+spe <- cytoGateR_example
+plot_marker_density(
+  spe,
+  marker = rownames(spe)[1],
+  image_col = "image_name"
+)
+}

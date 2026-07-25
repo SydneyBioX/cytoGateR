@@ -1,0 +1,128 @@
+---
+title: "Introduction to cytoGateR"
+author: "cytoGateR authors"
+vignette: >
+  %\VignetteIndexEntry{1. Introduction to cytoGateR}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+format:
+  html:
+    toc: true
+    number-sections: true
+execute:
+  warning: false
+  message: false
+---
+
+# Introduction
+
+`cytoGateR` provides marker-aware cell-type annotation for spatial protein
+imaging data. It combines interpretable marker gating with supervised
+prediction of cells that cannot be confidently gated. The package operates on
+`SpatialExperiment` and `SummarizedExperiment` objects and stores labels,
+probabilities, and uncertainty measurements in standard Bioconductor
+containers.
+
+The package is designed for imaging assays with a relatively small protein
+panel, where marker knowledge remains important and annotation decisions should
+be inspectable. The main workflow consists of:
+
+1. defining positive and negative markers for candidate cell types;
+2. estimating cell-type probabilities with tree or soft gating;
+3. selecting high-confidence reference cells;
+4. predicting the remaining cells with a supervised classifier; and
+5. visualising labels, probabilities, and uncertainty.
+
+# Installation
+
+Install the package from Bioconductor:
+
+```{r}
+#| eval: false
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+BiocManager::install("cytoGateR")
+```
+
+Load the package:
+
+```{r}
+library(cytoGateR)
+```
+
+# Example data
+
+The package includes a compact `SpatialExperiment` derived from the IMMUcan
+2022 Cancer Example dataset. It contains normalized marker expression, spatial
+coordinates, tree-gating results, high-confidence reference labels, and
+weighted k-nearest-neighbour (kNN) predictions.
+
+```{r}
+data("cytoGateR_example", package = "cytoGateR")
+cytoGateR_example
+```
+
+The object contains 40 protein markers:
+
+```{r}
+head(rownames(cytoGateR_example))
+SummarizedExperiment::assayNames(cytoGateR_example)
+```
+
+Sample and image identifiers are stored in `colData()`:
+
+```{r}
+cd <- SummarizedExperiment::colData(cytoGateR_example)
+table(cd$sample_id)
+table(cd$image_name)
+```
+
+Spatial coordinates are available through the standard
+`SpatialExperiment::spatialCoords()` accessor:
+
+```{r}
+head(SpatialExperiment::spatialCoords(cytoGateR_example))
+```
+
+# Stored annotation outputs
+
+Tree-gating probabilities use the prefix `P_`, while the complete kNN
+probability matrix uses the prefix `KNN_P_`.
+
+```{r}
+tree_probability_columns <- grep("^P_", names(cd), value = TRUE)
+knn_probability_columns <- grep("^KNN_P_", names(cd), value = TRUE)
+
+tree_probability_columns
+knn_probability_columns
+```
+
+The stored kNN probabilities form a complete probability distribution for each
+cell:
+
+```{r}
+knn_probabilities <- as.matrix(cd[, knn_probability_columns])
+summary(rowSums(knn_probabilities))
+```
+
+Frequently used annotation columns include:
+
+```{r}
+annotation_columns <- c(
+  "cell_type_hard",
+  "core_group",
+  "knn_label",
+  "knn_confidence"
+)
+annotation_columns[annotation_columns %in% names(cd)]
+```
+
+The next vignette demonstrates marker-aware tree gating and visualisation. The
+third vignette uses high-confidence cells as a supervised-learning reference.
+
+# Session information
+
+```{r}
+sessionInfo()
+```

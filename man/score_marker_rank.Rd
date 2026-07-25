@@ -15,3 +15,6 @@ numeric in [0,1]
 \description{
 Rank based marker score
 }
+\examples{
+score_marker_rank(c(3, 1, 2, NA))
+}

@@ -17,6 +17,30 @@ calculate_uncertainty(prob_mat, spe, sample_col = "sample_id", k_spatial = 15)
 from training) to rbind with prob_mat before processing. Both must share
 the same column names.}
 }
+\value{
+A data frame with one row per cell and columns for normalized
+  entropy, Gini impurity, margin uncertainty, and spatial discordance.
+}
 \description{
 Calculate Full Uncertainty Suite with Sample Grouping
+}
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+prob_cols <- grep(
+  "^KNN_P_",
+  names(SummarizedExperiment::colData(spe)),
+  value = TRUE
+)
+prob_mat <- as.matrix(SummarizedExperiment::colData(spe)[, prob_cols])
+rownames(prob_mat) <- colnames(spe)
+colnames(prob_mat) <- sub("^KNN_P_", "", colnames(prob_mat))
+uncertainty <- calculate_uncertainty(
+  prob_mat,
+  spe,
+  sample_col = "sample_id",
+  k_spatial = 3
+)
+head(uncertainty)
 }

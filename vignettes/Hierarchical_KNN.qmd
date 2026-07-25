@@ -1,0 +1,190 @@
+---
+title: "Hierarchical kNN Classification"
+author: "cytoGateR authors"
+vignette: >
+  %\VignetteIndexEntry{4. Hierarchical kNN Classification}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+format:
+  html:
+    toc: true
+    number-sections: true
+execute:
+  warning: false
+  message: false
+---
+
+# Overview
+
+Flat classifiers predict among all cell types in a single step. Hierarchical
+k-nearest-neighbour (kNN) classification instead organizes reference cell types
+into a tree and predicts one branch at a time. Each internal node separates the
+cell types on its left branch from those on its right branch. A cell moves
+recursively through the hierarchy until it reaches a terminal cell type or
+fails the confidence and agreement requirements.
+
+This vignette demonstrates the complete hierarchical kNN workflow on one
+complete image from `cytoGateR_example`.
+
+```{r}
+library(cytoGateR)
+data("cytoGateR_example", package = "cytoGateR")
+
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+spe
+```
+
+# Prepare reference labels
+
+The packaged `core_group` column contains high-confidence labels produced by
+tree gating. Cells outside the high-confidence reference are marked
+`"Unassigned"`. The hierarchy builders use `"Unknown"` for cells that should
+not contribute to the reference, so the labels are harmonized before fitting.
+
+```{r}
+cd <- SummarizedExperiment::colData(spe)
+cd$hier_reference_label <- as.character(cd$core_group)
+cd$hier_reference_label[cd$hier_reference_label == "Unassigned"] <- "Unknown"
+SummarizedExperiment::colData(spe) <- cd
+
+table(SummarizedExperiment::colData(spe)$hier_reference_label)
+```
+
+# Build the lineage hierarchy
+
+`build_lineage_hierarchy()` calculates the average marker-expression profile
+for each reference cell type and hierarchically clusters those profiles.
+
+```{r}
+hc_tree <- build_lineage_hierarchy(
+  spe,
+  label_col = "hier_reference_label",
+  assay_name = "exprs"
+)
+
+hc_tree$labels
+plot(hc_tree, main = "Hierarchy of reference cell types")
+```
+
+# Build node-specific references
+
+Each internal node receives its own binary training reference. Labels are
+converted to `"Left"` and `"Right"` according to the branches of `hc_tree`.
+
+Setting `top_n = NULL` uses all available markers at each node. For larger
+panels, `marker_stats` and `top_n` can be supplied to retain only the most
+informative markers for each split.
+
+```{r}
+hier_reference <- build_hierarchical_reference(
+  spe,
+  hc_tree,
+  label_col = "hier_reference_label",
+  top_n = NULL,
+  assay_name = "exprs",
+  unknown_label = "Unknown"
+)
+
+names(hier_reference)
+```
+
+Inspect the root-node reference:
+
+```{r}
+root_name <- paste0("Node_", nrow(hc_tree$merge))
+root_reference <- hier_reference[[root_name]]
+
+dim(root_reference$train_data)
+table(root_reference$train_labels)
+root_reference$left_members
+root_reference$right_members
+```
+
+# Run recursive hierarchical kNN
+
+At each node, `predict_hierarchical_knn_recursive()` creates an ensemble of
+weighted kNN predictions. A prediction is accepted only when both its average
+probability and ensemble agreement pass their thresholds.
+
+The vignette uses one distance method and one repeat for speed. Production
+analyses can use multiple distance methods and additional repeats for a more
+stable ensemble.
+
+```{r}
+set.seed(1)
+spe <- predict_hierarchical_knn_recursive(
+  spe,
+  hier_reference,
+  hc_tree,
+  assay_name = "exprs",
+  threshold = 0.5,
+  agreement_threshold = 0.5,
+  k = 3,
+  repeats = 1,
+  dist_methods = "pearson",
+  BPPARAM = BiocParallel::SerialParam(),
+  out_col = "hier_label",
+  chunk_size = 1000,
+  unassigned_label = "Unassigned"
+)
+```
+
+# Inspect hierarchical predictions
+
+```{r}
+table(SummarizedExperiment::colData(spe)$hier_label)
+```
+
+The predictions can be compared with labels already stored in the demo object:
+
+```{r}
+label_confusion_matrix(
+  spe,
+  label_col1 = "knn_label",
+  label_col2 = "hier_label"
+)
+```
+
+```{r}
+label_agreement_rates(
+  spe,
+  label_col1 = "knn_label",
+  label_col2 = "hier_label"
+)
+```
+
+Finally, display the hierarchical predictions in spatial coordinates:
+
+```{r}
+plot_labelled_cells(
+  spe,
+  col_label = "hier_label",
+  image_col = "image_name"
+)
+```
+
+# Production settings
+
+A larger ensemble can combine correlation- and angle-based similarity measures:
+
+```{r}
+#| eval: false
+spe <- predict_hierarchical_knn_recursive(
+  spe,
+  hier_reference,
+  hc_tree,
+  threshold = 0.7,
+  agreement_threshold = 0.8,
+  k = 5,
+  repeats = 5,
+  dist_methods = c("pearson", "cosine"),
+  BPPARAM = BiocParallel::SerialParam()
+)
+```
+
+# Session information
+
+```{r}
+sessionInfo()
+```

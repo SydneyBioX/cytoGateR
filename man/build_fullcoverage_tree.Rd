@@ -45,3 +45,18 @@ tree object
 \description{
 Build full-coverage gating tree
 }
+\examples{
+set.seed(1)
+expr_mat <- rbind(
+  CD3 = c(rnorm(50, 0, 0.2), rnorm(50, 2, 0.2)),
+  CD20 = c(rnorm(50, 2, 0.2), rnorm(50, 0, 0.2))
+)
+tree <- build_fullcoverage_tree(
+  expr_mat,
+  markers_pos = c("CD3", "CD20"),
+  max_depth = 2,
+  min_cells = 20,
+  min_score = 0.1
+)
+tree$type
+}

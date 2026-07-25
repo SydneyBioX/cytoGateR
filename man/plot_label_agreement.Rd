@@ -33,3 +33,8 @@ A `ggplot` object.
 Computes per-label agreement (Jaccard overlap) between two label columns in
 `colData(spe)` and visualises it as a horizontal bar plot with class sizes.
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+spe <- cytoGateR_example
+plot_label_agreement(spe, "cell_type", "knn_label")
+}

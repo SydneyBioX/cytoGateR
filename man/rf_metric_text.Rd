@@ -18,3 +18,15 @@ A character vector of summary lines.
 Formats key overall and cross-validation metrics from a fitted model
 returned by [train_custom_rf()] into a character vector of human-readable lines.
 }
+\examples{
+fit <- list(
+  metrics = list(
+    accuracy = 0.75,
+    f1_macro = 0.73,
+    cv_overall = NULL
+  ),
+  test_truth = c("Bcell", "Bcell", "Tcell", "Tcell"),
+  test_pred = c("Bcell", "Tcell", "Tcell", "Tcell")
+)
+rf_metric_text(fit)
+}

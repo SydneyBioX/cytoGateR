@@ -21,3 +21,8 @@ Data frame with columns `class`, `tp`, `fp`, `fn`, `support`,
 Prefers cross-validation class metrics when available; otherwise derives
 metrics from the provided truth and prediction vectors.
 }
+\examples{
+truth <- c("Bcell", "Bcell", "Tcell", "Tcell")
+pred <- c("Bcell", "Tcell", "Tcell", "Tcell")
+class_metrics_from_fit(list(), truth, pred)
+}

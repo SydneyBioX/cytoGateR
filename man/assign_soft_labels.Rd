@@ -17,3 +17,10 @@ Character vector of labels length nrow(prob_mat).
 \description{
 Assign hard labels from probability matrix
 }
+\examples{
+prob_mat <- rbind(
+  cell1 = c(Bcell = 0.8, Tcell = 0.2),
+  cell2 = c(Bcell = 0.3, Tcell = 0.35)
+)
+assign_soft_labels(prob_mat, unknown_thresh = 0.4)
+}

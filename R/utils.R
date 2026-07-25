@@ -49,6 +49,11 @@
 #' @param pred_col Column name for results (e.g., "hier_label")
 #'
 #' @return A data frame with Precision, Recall, and F1 score per type
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' calculate_f1(spe, ref_col = "cell_type", pred_col = "knn_label")
 #' @export
 calculate_f1 <- function(spe, ref_col = "ref_broad", pred_col = "pred_broad") {
   df <- as.data.frame(SummarizedExperiment::colData(spe))
@@ -93,6 +98,28 @@ calculate_f1 <- function(spe, ref_col = "ref_broad", pred_col = "pred_broad") {
 #' @param k_spatial Neighbors for the spatial discordance check (default 15).
 #'   from training) to rbind with prob_mat before processing. Both must share
 #'   the same column names.
+#'
+#' @return A data frame with one row per cell and columns for normalized
+#'   entropy, Gini impurity, margin uncertainty, and spatial discordance.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' prob_cols <- grep(
+#'   "^KNN_P_",
+#'   names(SummarizedExperiment::colData(spe)),
+#'   value = TRUE
+#' )
+#' prob_mat <- as.matrix(SummarizedExperiment::colData(spe)[, prob_cols])
+#' rownames(prob_mat) <- colnames(spe)
+#' colnames(prob_mat) <- sub("^KNN_P_", "", colnames(prob_mat))
+#' uncertainty <- calculate_uncertainty(
+#'   prob_mat,
+#'   spe,
+#'   sample_col = "sample_id",
+#'   k_spatial = 3
+#' )
+#' head(uncertainty)
 #' @export
 calculate_uncertainty <- function(prob_mat,
                                   spe,
@@ -185,6 +212,28 @@ calculate_uncertainty <- function(prob_mat,
 #' @param lambda The "Spatial Weight" (default 0.2).
 #' @param protect_threshold Confidence level above which spatial priors are ignored (default 0.85).
 #' @param out_col Column name for the new labels.
+#'
+#' @return The input `SpatialExperiment` with the spatially adjusted labels
+#'   stored in `colData()` under `out_col`.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' prob_cols <- grep(
+#'   "^KNN_P_",
+#'   names(SummarizedExperiment::colData(spe)),
+#'   value = TRUE
+#' )
+#' prob_mat <- as.matrix(SummarizedExperiment::colData(spe)[, prob_cols])
+#' rownames(prob_mat) <- colnames(spe)
+#' colnames(prob_mat) <- sub("^KNN_P_", "", colnames(prob_mat))
+#' spe <- calculate_spatial_prior_labels(
+#'   spe,
+#'   prob_mat,
+#'   k_spatial = 3,
+#'   out_col = "spatial_label"
+#' )
+#' table(SummarizedExperiment::colData(spe)$spatial_label)
 #' @export
 calculate_spatial_prior_labels <- function(spe,
                                            prob_mat,

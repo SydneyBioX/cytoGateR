@@ -36,3 +36,13 @@ robust Tukey-style rule: a cell is considered confident if its maximum
 lineage probability exceeds `max(base_thresh, quantile + iqr_mult * IQR)` for
 that cell.
 }
+\examples{
+prob_mat <- rbind(
+  cell1 = c(Bcell = 0.9, Tcell = 0.1),
+  cell2 = c(Bcell = 0.5, Tcell = 0.5)
+)
+compute_custom_labels(
+  prob_mat,
+  flag_fn = function(x) max(x) >= 0.8
+)
+}

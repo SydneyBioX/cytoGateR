@@ -24,3 +24,11 @@ For each label (union of both columns), agreement is defined as the number of
 cells where both labels match that value divided by the number of cells where
 either column uses that value (Jaccard-style overlap).
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+label_agreement_rates(
+  cytoGateR_example,
+  "cell_type_hard",
+  "knn_label"
+)
+}

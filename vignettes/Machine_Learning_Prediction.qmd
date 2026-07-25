@@ -1,0 +1,172 @@
+---
+title: "Machine-Learning Prediction"
+author: "cytoGateR authors"
+vignette: >
+  %\VignetteIndexEntry{3. Machine-Learning Prediction}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+format:
+  html:
+    toc: true
+    number-sections: true
+execute:
+  warning: false
+  message: false
+---
+
+# Overview
+
+Tree gating can identify high-confidence reference cells while leaving
+ambiguous cells unassigned. This vignette uses the stored `core_group` labels
+to train a weighted k-nearest-neighbour classifier and predict the remaining
+cells.
+
+The example uses one complete image and reduced cross-validation settings to
+remain suitable for package checks.
+
+```{r}
+library(cytoGateR)
+data("cytoGateR_example", package = "cytoGateR")
+
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+table(SummarizedExperiment::colData(spe)$core_group)
+```
+
+# Train a weighted kNN reference
+
+Only cells with a known `core_group` label are used during reference cleaning.
+The `"Unassigned"` cells are retained for subsequent prediction.
+
+```{r}
+knn_reference <- train_custom_knn(
+  spe,
+  label_col = "core_group",
+  assay_name = "exprs",
+  unknown_label = "Unassigned",
+  features = c("CD3e", "CD20", "CD4", "CD8a"),
+  cv_folds = 2,
+  repeats = 1,
+  agreement_thresh = 0.5,
+  k = 3,
+  method = "pearson",
+  seed = 1,
+  BPPARAM = BiocParallel::SerialParam()
+)
+```
+
+The returned object contains a cleaned reference and cross-validated
+probabilities for retained reference cells:
+
+```{r}
+names(knn_reference)
+dim(knn_reference$model$reference_data)
+table(knn_reference$model$reference_labels)
+```
+
+# Predict unassigned cells
+
+```{r}
+knn_prediction <- predict_unknown_with_knn(
+  knn_reference$spe,
+  knn_reference,
+  assay_name = "exprs",
+  label_col = "cleaned_core_label",
+  out_col = "knn_label_filled",
+  pred_col = "knn_pred",
+  unknown_label = "Unassigned",
+  threshold = 0.5,
+  k = 3,
+  dist_method = "pearson"
+)
+```
+
+```{r}
+prediction_cd <- SummarizedExperiment::colData(knn_prediction$spe)
+table(prediction_cd$knn_label_filled)
+summary(prediction_cd$knn_confidence)
+```
+
+# Assemble the full probability matrix
+
+`train_custom_knn()` returns probabilities for retained reference cells, while
+`predict_unknown_with_knn()` returns probabilities for predicted cells. They
+can be combined and aligned to the cells present in the updated object.
+
+```{r}
+full_prob_mat <- rbind(
+  knn_reference$core_prob_mat,
+  knn_prediction$prob_mat
+)
+full_prob_mat <- full_prob_mat[colnames(knn_prediction$spe), , drop = FALSE]
+
+dim(full_prob_mat)
+summary(rowSums(full_prob_mat))
+```
+
+# Quantify uncertainty
+
+The uncertainty calculation combines probability-distribution measures with a
+sample-aware spatial-discordance score.
+
+```{r}
+uncertainty <- calculate_uncertainty(
+  full_prob_mat,
+  knn_prediction$spe,
+  sample_col = "sample_id",
+  k_spatial = 3
+)
+head(uncertainty)
+```
+
+# Compare labels
+
+```{r}
+label_confusion_matrix(
+  knn_prediction$spe,
+  label_col1 = "cell_type_hard",
+  label_col2 = "knn_label_filled"
+)
+```
+
+```{r}
+plot_labelled_cells(
+  knn_prediction$spe,
+  col_label = "knn_label_filled",
+  image_col = "image_name"
+)
+```
+
+# Other classifiers
+
+`cytoGateR` also provides random-forest and optional Torch-based deep-learning
+classifiers. They use the same core-label and unknown-cell workflow. The
+following production alternatives are not evaluated during vignette building.
+
+```{r}
+#| eval: false
+rf_reference <- train_custom_randomforest(
+  spe,
+  label_col = "core_group",
+  unknown_label = "Unassigned",
+  cv_folds = 5,
+  repeats = 10,
+  seed = 1
+)
+
+dl_reference <- train_custom_dl(
+  spe,
+  label_col = "core_group",
+  unknown_label = "Unassigned",
+  epochs = 50,
+  cv_folds = 5,
+  repeats = 3,
+  seed = 1
+)
+```
+
+# Session information
+
+```{r}
+sessionInfo()
+```

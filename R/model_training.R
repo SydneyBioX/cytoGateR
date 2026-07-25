@@ -16,6 +16,15 @@
 #'   returning a single logical value. Defaults to the Tukey-style rule above.
 #'
 #' @return Logical vector length `nrow(prob_mat)` indicating confident cells.
+#' @examples
+#' prob_mat <- rbind(
+#'   cell1 = c(Bcell = 0.9, Tcell = 0.1),
+#'   cell2 = c(Bcell = 0.5, Tcell = 0.5)
+#' )
+#' compute_custom_labels(
+#'   prob_mat,
+#'   flag_fn = function(x) max(x) >= 0.8
+#' )
 #' @export
 compute_custom_labels <- function(prob_mat,
                                    base_thresh = 0.4,
@@ -61,6 +70,12 @@ compute_custom_labels <- function(prob_mat,
 #' @param unknown_label Character label for uncertain cells (default "Unknown").
 #'
 #' @return Character vector of labels length `nrow(prob_mat)`.
+#' @examples
+#' prob_mat <- rbind(
+#'   cell1 = c(Bcell = 0.9, Tcell = 0.1),
+#'   cell2 = c(Bcell = 0.5, Tcell = 0.5)
+#' )
+#' assign_confident_labels(prob_mat, c(TRUE, FALSE))
 #' @export
 assign_confident_labels <- function(prob_mat,
                                     confidence_flags,
@@ -103,6 +118,24 @@ assign_confident_labels <- function(prob_mat,
 #'   logical indicating confidence; defaults to the internal Tukey-style rule.
 #'
 #' @return The input `spe` with a new `colData` column containing custom labels.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' prob_cols <- grep(
+#'   "^KNN_P_",
+#'   names(SummarizedExperiment::colData(spe)),
+#'   value = TRUE
+#' )
+#' prob_mat <- as.matrix(SummarizedExperiment::colData(spe)[, prob_cols])
+#' rownames(prob_mat) <- colnames(spe)
+#' colnames(prob_mat) <- sub("^KNN_P_", "", colnames(prob_mat))
+#' spe <- custom_labels(
+#'   spe,
+#'   prob_mat,
+#'   flag_fn = function(x) max(x) >= 0.8
+#' )
+#' table(SummarizedExperiment::colData(spe)$custom_label)
 #' @export
 custom_labels <- function(spe,
                           prob_mat,
@@ -201,6 +234,25 @@ custom_labels <- function(spe,
 #' The final model is trained with \code{probability = TRUE} to support downstream
 #' thresholding workflows.
 #'
+#' @examples
+#' \donttest{
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' fit <- train_custom_randomforest(
+#'   spe,
+#'   label_col = "core_group",
+#'   unknown_label = "Unassigned",
+#'   features = c("CD3e", "CD20", "CD4", "CD8a"),
+#'   num.trees = 25,
+#'   cv_folds = 2,
+#'   repeats = 1,
+#'   agreement_thresh = 0,
+#'   num_threads = 1,
+#'   seed = 1
+#' )
+#' fit$model
+#' }
 #' @export
 train_custom_randomforest <- function(spe,
                                       label_col = "cutoff_label",
@@ -308,6 +360,10 @@ train_custom_randomforest <- function(spe,
 #'
 #' @return Data frame with columns `class`, `tp`, `fp`, `fn`, `support`,
 #'   `precision`, `recall`, `f1`, and optionally `fold` when sourced from CV.
+#' @examples
+#' truth <- c("Bcell", "Bcell", "Tcell", "Tcell")
+#' pred <- c("Bcell", "Tcell", "Tcell", "Tcell")
+#' class_metrics_from_fit(list(), truth, pred)
 #' @export
 class_metrics_from_fit <- function(fit, test_truth = NULL, test_pred = NULL) {
   if (!is.null(fit$cv_class_metrics)) {
@@ -351,6 +407,13 @@ class_metrics_from_fit <- function(fit, test_truth = NULL, test_pred = NULL) {
 #' @param drop_na Logical; if TRUE, rows with NA in either label are dropped. Default TRUE.
 #'
 #' @return A table with rows = `label_col1` levels and columns = `label_col2` levels.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' label_confusion_matrix(
+#'   cytoGateR_example,
+#'   "cell_type_hard",
+#'   "knn_label"
+#' )
 #' @export
 label_confusion_matrix <- function(spe,
                                    label_col1,
@@ -396,6 +459,13 @@ label_confusion_matrix <- function(spe,
 #' @param drop_na Logical; if TRUE, rows with NA in either label are dropped. Default TRUE.
 #'
 #' @return A data frame with columns `label`, `match_n`, `union_n`, and `agreement`.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' label_agreement_rates(
+#'   cytoGateR_example,
+#'   "cell_type_hard",
+#'   "knn_label"
+#' )
 #' @export
 label_agreement_rates <- function(spe,
                                   label_col1,
@@ -486,6 +556,32 @@ label_agreement_rates <- function(spe,
 #' model training. Only cells originally labeled as \code{NA} or
 #' \code{unknown_label} are replaced in the output column.
 #'
+#' @examples
+#' \donttest{
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' fit <- train_custom_randomforest(
+#'   spe,
+#'   label_col = "core_group",
+#'   unknown_label = "Unassigned",
+#'   features = c("CD3e", "CD20", "CD4", "CD8a"),
+#'   num.trees = 25,
+#'   cv_folds = 2,
+#'   repeats = 1,
+#'   agreement_thresh = 0,
+#'   num_threads = 1,
+#'   seed = 1
+#' )
+#' prediction <- predict_unknown_with_randomforest(
+#'   fit$spe,
+#'   fit$model,
+#'   label_col = "cleaned_core_label",
+#'   unknown_label = "Unassigned",
+#'   threshold = 0.5
+#' )
+#' table(SummarizedExperiment::colData(prediction$spe)$soft_tree_label_filled)
+#' }
 #' @export
 predict_unknown_with_randomforest <- function(spe,
                                               model,
@@ -560,6 +656,20 @@ predict_unknown_with_randomforest <- function(spe,
 #' @return `rf_metric_table()` returns a list of tables: `overall`,
 #'   `cv_overall`, `cv_overall_summary`, `class`, and `class_raw`.
 #'   `rf_metric_text()` returns a character vector of summary lines.
+#' @examples
+#' fit <- list(
+#'   metrics = list(
+#'     accuracy = 0.75,
+#'     f1_macro = 0.73,
+#'     cv_overall = data.frame(
+#'       accuracy = c(0.7, 0.8),
+#'       f1_macro = c(0.68, 0.78)
+#'     )
+#'   ),
+#'   test_truth = c("Bcell", "Bcell", "Tcell", "Tcell"),
+#'   test_pred = c("Bcell", "Tcell", "Tcell", "Tcell")
+#' )
+#' rf_metric_table(fit)
 #' @export
 rf_metric_table <- function(fit) {
   if (is.null(fit$metrics)) stop("fit must contain a metrics element.")
@@ -616,6 +726,17 @@ rf_metric_table <- function(fit) {
 #' @param digits Number of digits when formatting numeric values (default 3).
 #'
 #' @return A character vector of summary lines.
+#' @examples
+#' fit <- list(
+#'   metrics = list(
+#'     accuracy = 0.75,
+#'     f1_macro = 0.73,
+#'     cv_overall = NULL
+#'   ),
+#'   test_truth = c("Bcell", "Bcell", "Tcell", "Tcell"),
+#'   test_pred = c("Bcell", "Tcell", "Tcell", "Tcell")
+#' )
+#' rf_metric_text(fit)
 #' @export
 rf_metric_text <- function(fit, digits = 3) {
   tbl <- rf_metric_table(fit)
@@ -650,6 +771,8 @@ rf_metric_text <- function(fit, digits = 3) {
 #' @param prob Quantile to use (default 0.98).
 #'
 #' @return Numeric scalar cutoff.
+#' @examples
+#' prob_quantile_cutoff(c(0.1, 0.2, 0.8, 0.9), prob = 0.75)
 #' @export
 prob_quantile_cutoff <- function(x, prob = 0.98) {
   x <- as.numeric(x)
@@ -665,6 +788,8 @@ prob_quantile_cutoff <- function(x, prob = 0.98) {
 #' @param mad_mult Multiplier on MAD (default 3).
 #'
 #' @return Numeric scalar cutoff.
+#' @examples
+#' prob_mad_cutoff(c(0.1, 0.1, 0.2, 0.9), mad_mult = 2)
 #' @export
 prob_mad_cutoff <- function(x, mad_mult = 3) {
   x <- as.numeric(x)
@@ -685,6 +810,16 @@ prob_mad_cutoff <- function(x, mad_mult = 3) {
 #'   numeric cutoff (default [prob_quantile_cutoff()]).
 #'
 #' @return Logical matrix with the same dimensions and dimnames as `prob_mat`.
+#' @examples
+#' prob_mat <- rbind(
+#'   cell1 = c(Bcell = 0.9, Tcell = 0.1),
+#'   cell2 = c(Bcell = 0.2, Tcell = 0.8),
+#'   cell3 = c(Bcell = 0.4, Tcell = 0.3)
+#' )
+#' probability_label_matrix(
+#'   prob_mat,
+#'   cutoff_fn = function(x) 0.5
+#' )
 #' @export
 probability_label_matrix <- function(prob_mat, cutoff_fn = prob_quantile_cutoff) {
   if (!is.matrix(prob_mat)) stop("prob_mat must be a matrix.")
@@ -730,6 +865,23 @@ probability_label_matrix <- function(prob_mat, cutoff_fn = prob_quantile_cutoff)
 #'
 #' @return The input `res` list with updated `spe` and a new `label_mat`
 #'   element.
+#' @examples
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' prob_cols <- grep(
+#'   "^KNN_P_",
+#'   names(SummarizedExperiment::colData(spe)),
+#'   value = TRUE
+#' )
+#' prob_mat <- as.matrix(SummarizedExperiment::colData(spe)[, prob_cols])
+#' rownames(prob_mat) <- colnames(spe)
+#' colnames(prob_mat) <- sub("^KNN_P_", "", colnames(prob_mat))
+#' result <- apply_cutoff_labels(
+#'   list(spe = spe, prob_mat = prob_mat),
+#'   cutoff_fn = function(x) 0.5
+#' )
+#' table(SummarizedExperiment::colData(result$spe)$cutoff_label)
 #' @export
 apply_cutoff_labels <- function(res,
                                 cutoff_fn = prob_quantile_cutoff,
@@ -830,6 +982,24 @@ apply_cutoff_labels <- function(res,
 #'     in the reference set after cleaning.}
 #' }
 #'
+#' @examples
+#' \donttest{
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' knn_ref <- train_custom_knn(
+#'   spe,
+#'   label_col = "core_group",
+#'   unknown_label = "Unassigned",
+#'   features = c("CD3e", "CD20", "CD4", "CD8a"),
+#'   cv_folds = 2,
+#'   repeats = 1,
+#'   agreement_thresh = 0.5,
+#'   k = 3,
+#'   seed = 1
+#' )
+#' knn_ref$model
+#' }
 #' @export
 train_custom_knn <- function(spe,
                              label_col = "cutoff_label",
@@ -954,6 +1124,32 @@ train_custom_knn <- function(spe,
 #' @param chunk_size Number of cells to process per chunk for memory management.
 #'
 #' @return A list containing the updated \code{spe} and the \code{prob_mat} (unknowns only).
+#' @examples
+#' \donttest{
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' knn_ref <- train_custom_knn(
+#'   spe,
+#'   label_col = "core_group",
+#'   unknown_label = "Unassigned",
+#'   features = c("CD3e", "CD20", "CD4", "CD8a"),
+#'   cv_folds = 2,
+#'   repeats = 1,
+#'   agreement_thresh = 0.5,
+#'   k = 3,
+#'   seed = 1
+#' )
+#' prediction <- predict_unknown_with_knn(
+#'   knn_ref$spe,
+#'   knn_ref,
+#'   label_col = "cleaned_core_label",
+#'   unknown_label = "Unassigned",
+#'   threshold = 0.5,
+#'   k = 3
+#' )
+#' head(SummarizedExperiment::colData(prediction$spe)$knn_label_filled)
+#' }
 #' @export
 predict_unknown_with_knn <- function(spe,
                                      knn_ref,
@@ -1217,6 +1413,37 @@ predict_wknn_multi <- function(train_data,
 #'   during prediction. Increasing this value may improve speed but requires
 #'   more memory. Default is \code{1000L}
 #' @param unassigned_label character label for Unassigned cells (default "Unassigned")
+#' @examples
+#' \donttest{
+#' data("cytoGateR_example", package = "cytoGateR")
+#' image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+#' spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+#' SummarizedExperiment::colData(spe)$cleaned_core_label <-
+#'   SummarizedExperiment::colData(spe)$core_group
+#' SummarizedExperiment::colData(spe)$cleaned_core_label[
+#'   SummarizedExperiment::colData(spe)$cleaned_core_label == "Unassigned"
+#' ] <- "Unknown"
+#' hc_tree <- build_lineage_hierarchy(
+#'   spe,
+#'   label_col = "cleaned_core_label"
+#' )
+#' hier_ref <- build_hierarchical_reference(
+#'   spe,
+#'   hc_tree,
+#'   label_col = "cleaned_core_label",
+#'   top_n = NULL,
+#'   unknown_label = "Unknown"
+#' )
+#' spe <- predict_hierarchical_knn_recursive(
+#'   spe,
+#'   hier_ref,
+#'   hc_tree,
+#'   repeats = 1,
+#'   dist_methods = "pearson",
+#'   k = 3
+#' )
+#' head(SummarizedExperiment::colData(spe)$hier_label)
+#' }
 #' @export
 predict_hierarchical_knn_recursive <- function(spe,
                                                hier_ref,

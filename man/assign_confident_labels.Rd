@@ -20,3 +20,10 @@ Character vector of labels length `nrow(prob_mat)`.
 Use a probability matrix and confidence flags to assign lineage labels;
 cells that are not confident receive `unknown_label`.
 }
+\examples{
+prob_mat <- rbind(
+  cell1 = c(Bcell = 0.9, Tcell = 0.1),
+  cell2 = c(Bcell = 0.5, Tcell = 0.5)
+)
+assign_confident_labels(prob_mat, c(TRUE, FALSE))
+}

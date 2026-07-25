@@ -90,3 +90,22 @@ Core cells are iteratively validated across repeated cross-validation folds,
 and cells with low label agreement are reassigned as unknown before a clean
 reference set is returned for downstream prediction.
 }
+\examples{
+\donttest{
+data("cytoGateR_example", package = "cytoGateR")
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+knn_ref <- train_custom_knn(
+  spe,
+  label_col = "core_group",
+  unknown_label = "Unassigned",
+  features = c("CD3e", "CD20", "CD4", "CD8a"),
+  cv_folds = 2,
+  repeats = 1,
+  agreement_thresh = 0.5,
+  k = 3,
+  seed = 1
+)
+knn_ref$model
+}
+}

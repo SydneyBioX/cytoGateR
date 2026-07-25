@@ -42,3 +42,8 @@ columns. The y-axis shows all unique cell types found across the specified
 label columns (excluding Unknown/NA), x-axis shows counts, and points are
 colored by which label column they came from.
 }
+\examples{
+data("cytoGateR_example", package = "cytoGateR")
+spe <- cytoGateR_example
+plot_label_dotplot(spe, c("cell_type", "cell_type_hard", "knn_label"))
+}
