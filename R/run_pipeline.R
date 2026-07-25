@@ -146,7 +146,7 @@ run_tree_gating <- function(spe,
                             min_cells = 200,
                             min_score = 0.5,
                             uncert_thresh = 0.25,
-                            neg_strength = 0.4, # <--- ADD HERE
+                            neg_strength = 0.4, 
                             cutoff_method = c("mean", "equal_posteriors"),
                             gmm_model_names = NULL,
                             # parallel = FALSE,
@@ -219,7 +219,7 @@ run_tree_gating <- function(spe,
         combine = "mean",
         neg_markers = neg,
         marker_stats = marker_stats,
-        neg_strength = neg_strength # <--- PASS HERE
+        neg_strength = neg_strength 
       )
     }, numeric(1))
   })

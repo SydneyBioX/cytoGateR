@@ -29,7 +29,6 @@ fit_gmm_2 <- function(x,
   mu <- as.numeric(gmm$parameters$mean)
   # sig2 <- as.numeric(gmm$parameters$variance$sigmasq)
 
-  # --- FIX START ---
   # Check if sigmasq is a single value (Equal Variance model) and replicate it if so
   sig2 <- gmm$parameters$variance$sigmasq
   if (length(sig2) == 1) {
