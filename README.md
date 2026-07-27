@@ -1,4 +1,4 @@
-# cytoGateR
+# cytoGateR  <a href="https://github.com/SydneyBioX/cytoGateR"><img src="https://i.imgur.com/BmRpXzR.png" title="cytoGateR hex sticker" align="right" height="138" /></a>
 
 `cytoGateR` is an R package for marker-aware cell-type annotation in spatial
 protein imaging data, such as imaging mass cytometry (IMC) and CODEX data.
