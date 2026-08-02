@@ -50,20 +50,45 @@ def gmm_equal_posterior_cutoff(mu1, mu2, s1, s2, p1, p2):
         return midpoint
 
 
-def fit_gmm_2(x, cutoff_method="mean", gmm_model_names=None):
-    """Fit the R package's two-component, one-dimensional GMM."""
-    del gmm_model_names  # mclust-specific; retained for API alignment.
-    x = np.asarray(x, dtype=float)
-    x = x[np.isfinite(x)]
-    if len(x) < 50 or len(np.unique(x)) < 3:
-        return None
+# No single quantile pair seeds every marker well: whichever pair is chosen, a
+# zero spike that reaches exactly that far leaves both components inside it.
+# mclust sidesteps this with a hierarchical-clustering initialisation; here the
+# EM is simply restarted from several seeds and the best likelihood is kept.
+# ``None`` seeds from the observed range, which is what rescues the markers that
+# are almost entirely zero.
+_INIT_QUANTILES = ((0.25, 0.75), (0.10, 0.90), (0.01, 0.99), None)
 
-    # Small deterministic 1-D EM avoids exposing extra Python-only parameters.
-    mu = np.quantile(x, [0.25, 0.75]).astype(float)
+# An unequal-variance component that latches onto a point mass shrinks its own
+# SD towards 0, where the Gaussian density -- and so the likelihood -- is
+# unbounded. Such a fit always wins on likelihood, so it has to be rejected
+# outright rather than compared. mclust avoids this by preferring the
+# equal-variance model, which cannot collapse.
+_MIN_SD_RATIO = 0.05
+
+
+def _fit_two_component_em(x, quantiles, tied, max_iter=500):
+    """Run one deterministic 1-D two-component EM, ordered by increasing mean.
+
+    ``tied`` pools the variance across both components, reproducing mclust's
+    equal-variance ("E") model; otherwise each component keeps its own variance
+    ("V").
+    """
+    if quantiles is None:
+        mu = np.array([float(np.min(x)), float(np.max(x))])
+    else:
+        mu = np.quantile(x, quantiles).astype(float)
+    if mu[0] == mu[1]:
+        # Both seeds landed on the same value (a marker that is almost entirely
+        # zero). Fall back to the observed range so the two components start
+        # apart and the EM has some asymmetry to work with.
+        mu = np.array([float(np.min(x)), float(np.max(x))])
+    if mu[0] == mu[1]:
+        return mu, np.repeat(np.nan, 2), np.repeat(np.nan, 2), -np.inf
     sd = np.repeat(max(float(np.std(x)), 1e-6), 2)
     weight = np.array([0.5, 0.5])
     previous = -np.inf
-    for _ in range(200):
+    likelihood = previous
+    for _ in range(max_iter):
         density = np.column_stack(
             [
                 weight[k] / (sd[k] * np.sqrt(2 * pi))
@@ -75,11 +100,19 @@ def fit_gmm_2(x, cutoff_method="mean", gmm_model_names=None):
         total[total == 0] = np.finfo(float).tiny
         responsibility = density / total
         nk = responsibility.sum(axis=0)
+        if not np.all(nk > 0):
+            # One component lost every cell: too few points to carry a second
+            # component at all. mclust::Mclust returns NULL on the same input.
+            return mu, np.repeat(np.nan, 2), np.repeat(np.nan, 2), -np.inf
         mu = (responsibility * x[:, None]).sum(axis=0) / nk
-        variance = (
-            responsibility * (x[:, None] - mu) ** 2
-        ).sum(axis=0) / nk
-        sd = np.sqrt(np.maximum(variance, 1e-12))
+        if tied:
+            variance = (responsibility * (x[:, None] - mu) ** 2).sum() / len(x)
+            sd = np.repeat(np.sqrt(max(float(variance), 1e-12)), 2)
+        else:
+            variance = (
+                responsibility * (x[:, None] - mu) ** 2
+            ).sum(axis=0) / nk
+            sd = np.sqrt(np.maximum(variance, 1e-12))
         weight = nk / len(x)
         likelihood = float(np.log(total).sum())
         if abs(likelihood - previous) < 1e-6:
@@ -87,9 +120,53 @@ def fit_gmm_2(x, cutoff_method="mean", gmm_model_names=None):
         previous = likelihood
 
     order = np.argsort(mu)
-    mu1, mu2 = mu[order]
-    s1, s2 = sd[order]
-    p1, p2 = weight[order]
+    return mu[order], sd[order], weight[order], likelihood
+
+
+def fit_gmm_2(x, cutoff_method="mean", gmm_model_names=None):
+    """Fit the R package's two-component, one-dimensional GMM.
+
+    Mirrors ``mclust::Mclust(x, G = 2)``: both the equal-variance ("E") and
+    unequal-variance ("V") models are fitted and the better BIC wins, except
+    that variance-collapsed "V" fits are discarded first. ``gmm_model_names``
+    accepts "E" or "V" to pin the model, matching R's ``modelNames``.
+    """
+    x = np.asarray(x, dtype=float)
+    x = x[np.isfinite(x)]
+    if len(x) < 50 or len(np.unique(x)) < 3:
+        return None
+
+    requested = None if gmm_model_names is None else str(gmm_model_names).upper()
+    if requested not in (None, "E", "V"):
+        raise ValueError(f"gmm_model_names must be 'E', 'V', or None; got {gmm_model_names!r}")
+    models = (True, False) if requested is None else (requested == "E",)
+
+    candidates = []
+    for tied in models:
+        restarts = []
+        for quantiles in _INIT_QUANTILES:
+            mu, sd, weight, likelihood = _fit_two_component_em(x, quantiles, tied)
+            if not (np.isfinite(mu).all() and np.isfinite(sd).all()):
+                continue
+            if not np.isfinite(likelihood) or mu[0] == mu[1]:
+                continue
+            if not tied and sd.min() / sd.max() < _MIN_SD_RATIO:
+                continue  # collapsed onto a point mass; not a usable fit
+            restarts.append((likelihood, mu, sd, weight))
+        if not restarts:
+            continue
+        likelihood, mu, sd, weight = max(restarts, key=lambda restart: restart[0])
+        n_parameters = 4 if tied else 5  # 2 means + 1 weight + 1 or 2 variances
+        bic = 2.0 * likelihood - n_parameters * log(len(x))
+        candidates.append((bic, mu, sd, weight))
+
+    if not candidates:
+        return None
+
+    _, mu, sd, weight = max(candidates, key=lambda candidate: candidate[0])
+    mu1, mu2 = mu
+    s1, s2 = sd
+    p1, p2 = weight
     cutoff = (
         gmm_equal_posterior_cutoff(mu1, mu2, s1, s2, p1, p2)
         if cutoff_method == "equal_posteriors"

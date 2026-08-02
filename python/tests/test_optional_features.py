@@ -1,16 +1,18 @@
-import matplotlib
-matplotlib.use("Agg")
-
-import anndata as ad
 import numpy as np
 import pandas as pd
+import pytest
 
-from cytogater.models.neural_network import (
+matplotlib = pytest.importorskip("matplotlib", reason="requires the [plot] extra")
+matplotlib.use("Agg")
+pytest.importorskip("torch", reason="requires the [torch] extra")
+ad = pytest.importorskip("anndata")
+
+from cytogater.models.neural_network import (  # noqa: E402
     predict_unknown_with_dl,
     train_custom_dl,
 )
-from cytogater.plotting import plot_labelled_cells
-from cytogater.uncertainty import calculate_uncertainty
+from cytogater.plotting import plot_labelled_cells  # noqa: E402
+from cytogater.uncertainty import calculate_uncertainty  # noqa: E402
 
 
 def test_anndata_torch_plotting_and_uncertainty():
