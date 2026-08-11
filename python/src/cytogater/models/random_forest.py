@@ -56,6 +56,7 @@ def train_custom_randomforest(
     classes = np.unique(y_cv)
     probabilities = np.zeros((len(x), len(classes)))
     counts = np.zeros(len(x))
+    match_counts = np.zeros(len(x))
     eligible_positions = np.flatnonzero(eligible)
     for train, test in cv.split(x_cv, y_cv):
         cleaner.fit(x_cv.iloc[train], y_cv.iloc[train])
@@ -64,12 +65,16 @@ def train_custom_randomforest(
         original_test = eligible_positions[test]
         probabilities[np.ix_(original_test, positions)] += fold
         counts[original_test] += 1
+        fold_labels = cleaner.classes_[fold.argmax(axis=1)]
+        match_counts[original_test] += (
+            fold_labels == y_cv.iloc[test].to_numpy()
+        )
     probabilities[eligible] /= counts[eligible, None]
-    consensus = np.full(len(x), "", dtype=object)
-    consensus[eligible] = classes[probabilities[eligible].argmax(axis=1)]
-    agreement = eligible & (consensus == y.to_numpy())
-    # Repeated CV returns one out-of-fold prediction per sample; preserve R threshold API.
-    rates = agreement.astype(float)
+    # R increments a match counter for every repeat's out-of-fold hard
+    # prediction, then divides by repeats. Using only the winner of averaged
+    # probabilities incorrectly collapses agreement to 0 or 1.
+    rates = np.zeros(len(x))
+    rates[eligible] = match_counts[eligible] / counts[eligible]
     retained = eligible & (rates >= agreement_thresh)
     cleaned = labels.copy()
     cleaned.loc[x.index[~retained]] = unknown_label
@@ -101,7 +106,10 @@ def predict_unknown_with_randomforest(
     unassigned_label="Unassigned",
 ):
     frame = expression_frame(spe, assay_name)
-    labels = spe.obs[label_col].copy()
+    # AnnData commonly round-trips string observation columns as Categoricals.
+    # Prediction may introduce a model class or ``Unassigned`` that is not an
+    # existing category, so perform replacement on an object-backed Series.
+    labels = spe.obs[label_col].astype(object).copy()
     replace = labels.isna() | (labels == unknown_label)
     if not replace.any():
         return {"spe": spe, "prob_mat": None}

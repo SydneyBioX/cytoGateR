@@ -1,0 +1,52 @@
+[
+  {
+    "cell_type": "Tumor",
+    "pos_markers": ["CDH1", "CA9"],
+    "neg_markers": ["CD3e", "CD20", "SMA", "CD68", "MPO"]
+  },
+  {
+    "cell_type": "Stroma",
+    "pos_markers": ["PDGFRB", "SMA"],
+    "neg_markers": ["CDH1", "CD3e", "CD20", "MPO", "CD68"]
+  },
+  {
+    "cell_type": "Neutrophil",
+    "pos_markers": ["MPO", "CD15"],
+    "neg_markers": ["CD3e", "CD20", "CD68", "CDH1"]
+  },
+  {
+    "cell_type": "Myeloid",
+    "pos_markers": ["CD68", "CD163", "CD14"],
+    "neg_markers": ["CD3e", "CD20", "MPO", "CDH1", "SMA"]
+  },
+  {
+    "cell_type": "Bcell",
+    "pos_markers": ["CD20"],
+    "neg_markers": ["CD3e", "MPO", "CDH1", "CD68"]
+  },
+  {
+    "cell_type": "Plasma_cell",
+    "pos_markers": ["CD38", "CD27"],
+    "neg_markers": ["CD20", "CD3e", "CD8a", "MPO"]
+  },
+  {
+    "cell_type": "CD8",
+    "pos_markers": ["CD8a", "GZMB"],
+    "neg_markers": ["CD4", "FOXP3", "CD20", "CDH1"]
+  },
+  {
+    "cell_type": "Treg",
+    "pos_markers": ["FOXP3", "ICOS"],
+    "neg_markers": ["CD8a", "CD20", "CDH1", "MPO"]
+  },
+  {
+    "cell_type": "CD4",
+    "pos_markers": ["CD4"],
+    "neg_markers": ["CD8a", "FOXP3", "CD20", "CD68"]
+  },
+  {
+    "cell_type": "BnTcell",
+    "pos_markers": ["CD7", "CD3e"],
+    "neg_markers": ["CDH1", "SMA", "MPO", "CD68"]
+  }
+]

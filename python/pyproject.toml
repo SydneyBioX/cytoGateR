@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cytogater"
-version = "0.1.0"
+version = "0.1.1"
 description = "Python implementation of cytoGateR marker-aware cell annotation"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -28,3 +28,6 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "slow: needs the shared PRJ-cytogater data and runs for ~1 minute per dataset",
+]

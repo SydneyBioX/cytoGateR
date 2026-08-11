@@ -27,9 +27,13 @@ src/cytogater/models/neural_network.py
 src/cytogater/models/random_forest.py
 tests/test_core.py
 tests/test_gmm.py
+tests/test_gmm_zero_inflation.py
+tests/test_hierarchical.py
 tests/test_metrics.py
 tests/test_models.py
 tests/test_optional_features.py
+tests/test_plotting.py
 tests/test_r_parity.py
+tests/test_r_parity_tree_gating.py
 tests/test_soft_gating.py
 tests/test_tree_gating.py

@@ -215,11 +215,9 @@ def predict_unknown_with_knn(
     chunk_size=10000,
 ):
     frame = expression_frame(spe, assay_name)
-    current_labels = (
-        spe.obs["cleaned_core_label"].copy()
-        if "cleaned_core_label" in spe.obs
-        else spe.obs[label_col].copy()
-    )
+    if label_col not in spe.obs:
+        raise KeyError(f"label_col {label_col!r} is not present in spe.obs")
+    current_labels = spe.obs[label_col].astype(object).copy()
     replace = current_labels.isna() | (current_labels == unknown_label)
     if not replace.any():
         return {"spe": spe, "prob_mat": None}
@@ -257,37 +255,111 @@ def predict_hierarchical_knn_recursive(
     chunk_size=1000,
     unassigned_label="Unassigned",
 ):
-    """Traverse node references using an ensemble of weighted kNN predictions."""
-    del hc_tree, BPPARAM
+    """Traverse node references using the R implementation's kNN ensemble.
+
+    At every hierarchy node, each distance-method/repeat task draws 80% of the
+    node reference without replacement.  Predictions are made for all active
+    cells in chunks, then sufficiently confident cells are routed to the left
+    or right child.  ``BPPARAM`` is accepted for API parity; Python currently
+    executes the ensemble tasks serially.
+    """
+    del BPPARAM
     frame = expression_frame(spe, assay_name)
+    linkage_matrix = np.asarray(hc_tree["linkage"])
+    leaf_names = list(hc_tree["labels"])
+    n_leaves = len(leaf_names)
+    root_cluster = int(hier_ref.get("_root", 2 * n_leaves - 2))
     node_by_cluster = {
-        value["cluster_id"]: value for key, value in hier_ref.items() if key != "_root"
+        int(value["cluster_id"]): value
+        for key, value in hier_ref.items()
+        if key != "_root"
     }
+    methods = [dist_methods] if isinstance(dist_methods, str) else list(dist_methods)
+    if not methods or int(repeats) < 1:
+        raise ValueError("dist_methods must be non-empty and repeats must be at least 1")
+    if chunk_size is None or int(chunk_size) <= 0:
+        chunk_size = len(frame)
+    else:
+        chunk_size = int(chunk_size)
 
-    def descend(cell, cluster):
-        node = node_by_cluster.get(cluster)
+    final_labels = np.full(len(frame), None, dtype=object)
+
+    def child_clusters(cluster):
+        row = linkage_matrix[int(cluster) - n_leaves]
+        return int(row[0]), int(row[1])
+
+    def process_node(cluster, active_indices):
+        if not len(active_indices):
+            return
+        node = node_by_cluster.get(int(cluster))
         if node is None:
-            return unassigned_label
-        votes, confidence = [], []
-        for method in dist_methods:
-            for _ in range(repeats):
-                result = predict_wknn_multi(
-                    node["train_data"], cell[node["markers"]].to_frame().T,
-                    node["train_labels"], k, method, chunk_size=chunk_size,
-                )
-                votes.append(result["labels"][0])
-                confidence.append(result["probs"][0])
-        winner = max(set(votes), key=votes.count)
-        if np.mean(confidence) < threshold or votes.count(winner) / len(votes) < agreement_threshold:
-            return unassigned_label
-        members = node["left_members"] if winner == "Left" else node["right_members"]
-        if len(members) == 1:
-            return members[0]
-        candidates = [
-            value["cluster_id"] for value in node_by_cluster.values()
-            if set(value["left_members"] + value["right_members"]) == set(members)
-        ]
-        return descend(cell, candidates[0]) if candidates else unassigned_label
+            final_labels[active_indices] = unassigned_label
+            return
+        train_data = node["train_data"]
+        train_labels = np.asarray(node["train_labels"])
+        n_train = len(train_data)
+        sample_size = int(np.floor(0.8 * n_train))
+        if sample_size < 1:
+            raise ValueError(
+                f"Hierarchy node {cluster} has {n_train} training cell(s); "
+                "the R-style 80% subsample is empty."
+            )
 
-    spe.obs[out_col] = [descend(row, hier_ref["_root"]) for _, row in frame.iterrows()]
+        for start in range(0, len(active_indices), chunk_size):
+            chunk_indices = active_indices[start:start + chunk_size]
+            test_chunk = frame.iloc[chunk_indices].loc[:, node["markers"]]
+            task_labels = []
+            task_probs = []
+            # Equivalent to R's rep(dist_methods, each = repeats).
+            for method in methods:
+                for _ in range(int(repeats)):
+                    sampled = np.random.choice(
+                        n_train, size=sample_size, replace=False
+                    )
+                    result = predict_wknn_multi(
+                        train_data.iloc[sampled]
+                        if hasattr(train_data, "iloc")
+                        else np.asarray(train_data)[sampled],
+                        test_chunk,
+                        train_labels[sampled],
+                        k=k,
+                        method=method,
+                    )
+                    task_labels.append(result["labels"])
+                    task_probs.append(result["probs"])
+
+            all_labels = np.column_stack(task_labels)
+            all_probs = np.column_stack(task_probs)
+            label_levels = np.sort(np.unique(all_labels))
+            vote_counts = np.column_stack([
+                np.sum(all_labels == label, axis=1) for label in label_levels
+            ])
+            # R max.col() resolves ties randomly by default.
+            winners = np.empty(len(chunk_indices), dtype=object)
+            for row_index, row in enumerate(vote_counts):
+                tied = np.flatnonzero(row == row.max())
+                winners[row_index] = label_levels[np.random.choice(tied)]
+            agreement = vote_counts.max(axis=1) / all_labels.shape[1]
+            average_probability = np.mean(all_probs, axis=1)
+            uncertain = (
+                ~np.isfinite(average_probability)
+                | ~np.isfinite(agreement)
+                | (average_probability < threshold)
+                | (agreement < agreement_threshold)
+            )
+            final_labels[chunk_indices[uncertain]] = unassigned_label
+
+            left_child, right_child = child_clusters(cluster)
+            for choice, child in (("Left", left_child), ("Right", right_child)):
+                selected = (~uncertain) & (winners == choice)
+                routed = chunk_indices[selected]
+                if not len(routed):
+                    continue
+                if child < n_leaves:
+                    final_labels[routed] = leaf_names[child]
+                else:
+                    process_node(child, routed)
+
+    process_node(root_cluster, np.arange(len(frame), dtype=int))
+    spe.obs[out_col] = final_labels
     return spe

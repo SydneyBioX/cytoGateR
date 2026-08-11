@@ -99,16 +99,21 @@ def predict_unknown_with_dl(
     import torch
 
     frame = expression_frame(spe, assay_name)
-    labels = spe.obs[label_col].copy()
+    # Avoid pandas rejecting predicted classes absent from a categorical
+    # label column's currently registered categories.
+    labels = spe.obs[label_col].astype(object).copy()
     replace = labels.isna() | (labels == unknown_label)
     if not replace.any():
         return {"spe": spe, "prob_mat": None}
     x = frame.loc[replace, model["feature_names"]].to_numpy(np.float32)
     x = (x - model["center"]) / model["scale"]
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model["net"] = model["net"].to(device)
+    model["device"] = device
     model["net"].eval()
     with torch.no_grad():
         probability = torch.softmax(
-            model["net"](torch.tensor(x).to(model["device"])), dim=1
+            model["net"](torch.tensor(x).to(device)), dim=1
         ).cpu().numpy()
     probs = pd.DataFrame(
         probability, index=frame.index[replace], columns=model["class_levels"]

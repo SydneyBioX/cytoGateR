@@ -1,0 +1,82 @@
+[
+  {
+    "cell_type": "TUMOR",
+    "pos_markers": ["PanKRT", "ECAD", "CK7", "CK5", "HER2", "ER", "AR"],
+    "neg_markers": ["CD45", "CD31"]
+  },
+  {
+    "cell_type": "MYOEP",
+    "pos_markers": ["SMA", "CK5", "P63"],
+    "neg_markers": ["CD45", "CD31"]
+  },
+  {
+    "cell_type": "FIBROBLAST",
+    "pos_markers": ["VIM", "COLI", "FAP"],
+    "neg_markers": ["CD45", "PanKRT", "ECAD", "CK7", "CD31"]
+  },
+  {
+    "cell_type": "ENDO",
+    "pos_markers": ["CD31"],
+    "neg_markers": ["CD45", "PanKRT", "ECAD", "COLI", "FAP", "SMA"]
+  },
+  {
+    "cell_type": "BCELL",
+    "pos_markers": ["CD20"],
+    "neg_markers": ["CD3", "CD14", "CD68", "CD11c", "PanKRT", "ECAD"]
+  },
+  {
+    "cell_type": "TCELL",
+    "pos_markers": ["CD3", "CD45"],
+    "neg_markers": ["CD20", "CD14", "CD68", "CD4", "CD8", "CD11c", "PanKRT", "ECAD"]
+  },
+  {
+    "cell_type": "CD4T",
+    "pos_markers": ["CD3", "CD4", "CD45"],
+    "neg_markers": ["CD8", "CD20", "CD14", "CD68", "PanKRT", "ECAD"]
+  },
+  {
+    "cell_type": "CD8T",
+    "pos_markers": ["CD3", "CD8", "GZMB", "CD45"],
+    "neg_markers": ["CD4", "CD20", "CD14", "CD68", "PanKRT", "ECAD"]
+  },
+  {
+    "cell_type": "NEUT",
+    "pos_markers": ["MPO", "MMP9"],
+    "neg_markers": ["CD3", "CD20", "CD68", "CD14", "PanKRT", "ECAD"]
+  },
+  {
+    "cell_type": "MAST",
+    "pos_markers": ["Tryptase"],
+    "neg_markers": ["CD3", "CD20", "CD14", "CD68", "PanKRT", "ECAD"]
+  },
+  {
+    "cell_type": "MONO",
+    "pos_markers": ["CD14", "CD45"],
+    "neg_markers": ["CD3", "CD20", "PanKRT", "ECAD", "CD31"]
+  },
+  {
+    "cell_type": "MACS",
+    "pos_markers": ["CD68", "CD36", "CD14"],
+    "neg_markers": ["CD3", "CD20", "PanKRT", "ECAD", "CD31"]
+  },
+  {
+    "cell_type": "DC",
+    "pos_markers": ["CD11c", "HLADRDPDQ"],
+    "neg_markers": ["CD3", "CD20", "CD14", "CD68", "PanKRT", "ECAD"]
+  },
+  {
+    "cell_type": "APC",
+    "pos_markers": ["HLADRDPDQ"],
+    "neg_markers": ["PanKRT", "ECAD", "CD31"]
+  },
+  {
+    "cell_type": "MONODC",
+    "pos_markers": ["CD14", "CD11c", "HLADRDPDQ", "CD68"],
+    "neg_markers": ["CD3", "CD20", "PanKRT", "ECAD", "CD31"]
+  },
+  {
+    "cell_type": "IMMUNEOTHER",
+    "pos_markers": ["CD45"],
+    "neg_markers": ["PanKRT", "ECAD", "CK7", "CD31", "COLI", "FAP", "SMA"]
+  }
+]

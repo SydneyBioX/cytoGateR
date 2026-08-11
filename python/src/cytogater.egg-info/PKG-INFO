@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: cytogater
-Version: 0.1.0
+Version: 0.1.1
 Summary: Python implementation of cytoGateR marker-aware cell annotation
 License: GPL-2.0-only
 Requires-Python: >=3.10

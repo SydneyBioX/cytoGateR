@@ -121,14 +121,35 @@ plot_label_dotplot = plot_ct_marker_intensity
 
 
 def tree_to_df(node, parent=None, id="root"):
-    rows = [{"id": id, "parent": parent, "type": node["type"],
-             "marker": node.get("marker"), "cutoff": node.get("cutoff")}]
+    """Convert a gating tree to the labelled table used by both plot APIs."""
+    is_leaf = node["type"] == "leaf"
+    cutoff = node.get("cutoff")
+    separation = node.get("sep_score")
+    cutoff_label = float("nan") if cutoff is None else float(cutoff)
+    separation_label = float("nan") if separation is None else float(separation)
+    n_cells = len(node.get("cells", []))
+    label = (
+        f"leaf\nn={n_cells}"
+        if is_leaf
+        else f"{node['marker']} > {cutoff_label:.2f}\nsep={separation_label:.2f}"
+    )
+    rows = [{
+        "id": id,
+        "parent": parent,
+        "type": node["type"],
+        "label": label,
+        "marker": node.get("marker"),
+        "cutoff": cutoff,
+        "sep_score": separation,
+        "depth": node.get("depth"),
+        "n_cells": n_cells,
+    }]
     if node["type"] == "node":
         return pd.concat(
             [
                 pd.DataFrame(rows),
-                tree_to_df(node["left"], id, id + "L"),
-                tree_to_df(node["right"], id, id + "R"),
+                tree_to_df(node["left"], id, id + "_L"),
+                tree_to_df(node["right"], id, id + "_R"),
             ],
             ignore_index=True,
         )
@@ -147,14 +168,59 @@ def print_celltype_tree(node, indent=""):
 
 
 def plot_celltype_tree(tree, title="", ax=None):
+    """Plot a top-down dendrogram matching cytoGateR's R visualisation."""
     ax = ax or _plt().subplots()[1]
-    table = tree_to_df(tree)
-    depth = {row.id: len(row.id) - 4 for row in table.itertuples()}
+    table = tree_to_df(tree).set_index("id", drop=False)
+    positions = {}
+    next_leaf = [0]
+
+    def assign_positions(node, node_id="root", depth=0):
+        if node["type"] == "leaf":
+            x = float(next_leaf[0])
+            next_leaf[0] += 1
+        else:
+            left_x = assign_positions(node["left"], node_id + "_L", depth + 1)
+            right_x = assign_positions(node["right"], node_id + "_R", depth + 1)
+            x = (left_x + right_x) / 2
+        positions[node_id] = (x, -float(depth))
+        return x
+
+    assign_positions(tree)
     for row in table.itertuples():
-        if row.parent is not None:
-            ax.plot([depth[row.parent], depth[row.id]], [table.index[table.id == row.parent][0], row.Index], "k-")
-        ax.text(depth[row.id], row.Index, row.marker or "leaf")
-    ax.set(title=title)
+        if row.parent is None:
+            continue
+        parent_x, parent_y = positions[row.parent]
+        child_x, child_y = positions[row.id]
+        middle_y = (parent_y + child_y) / 2
+        ax.plot(
+            [parent_x, parent_x, child_x, child_x],
+            [parent_y, middle_y, middle_y, child_y],
+            color="#4b5563",
+            linewidth=0.8,
+            zorder=1,
+        )
+
+    for row in table.itertuples():
+        x, y = positions[row.id]
+        ax.text(
+            x,
+            y,
+            row.label,
+            ha="center",
+            va="center",
+            fontsize=8,
+            color="#111827",
+            bbox={
+                "boxstyle": "round,pad=0.3",
+                "facecolor": "white",
+                "edgecolor": "#4b5563",
+                "linewidth": 0.4,
+            },
+            zorder=2,
+        )
+
+    ax.set_title(title)
+    ax.margins(x=0.12, y=0.18)
     ax.axis("off")
     return ax
 
