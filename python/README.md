@@ -15,27 +15,31 @@ Implemented modules include:
 - probability and spatial uncertainty;
 - Matplotlib spatial, marker, label, metric, and tree plots.
 
-## Install
+## Installation
+
+Install the latest release from PyPI:
 
 ```bash
-pip install -e cytoGateR/python
+pip install cytogater
 ```
 
-For an isolated development and test environment:
+Plotting, neural-network, and notebook support are available as optional extras:
 
 ```bash
+pip install 'cytogater[plot]'
+pip install 'cytogater[torch]'
+pip install 'cytogater[notebook]'
+```
+
+To install from source for development, clone the repository and create the
+provided Conda environment:
+
+```bash
+git clone https://github.com/SydneyBioX/cytoGateR.git
 cd cytoGateR/python
 conda env create -f environment.yml
 conda activate cytogater-python
 pytest
-```
-
-Plotting and neural-network support are optional:
-
-```bash
-pip install -e 'cytoGateR/python[plot]'
-pip install -e 'cytoGateR/python[torch]'
-pip install -e 'cytoGateR/python[notebook]'
 ```
 
 ## Data layout
