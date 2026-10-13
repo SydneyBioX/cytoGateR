@@ -8,15 +8,6 @@
   --cyto-mist: #eef7f3;
 }
 
-[data-bs-theme="dark"] {
-  --cyto-ink: #d7eee7;
-  --cyto-green: #58d2bd;
-  --cyto-heading: #8ce3d2;
-  --cyto-nav-bg: #0b2924;
-  --cyto-amber: #f2b766;
-  --cyto-mist: #173b34;
-}
-
 body {
   letter-spacing: -0.008em;
 }
@@ -65,16 +56,6 @@ body {
   box-shadow: 0 10px 28px rgba(18, 60, 53, 0.18);
 }
 
-.navbar .dropdown-item {
-  color: var(--cyto-ink);
-}
-
-.navbar .dropdown-item:hover,
-.navbar .dropdown-item:focus {
-  background-color: var(--cyto-mist);
-  color: var(--cyto-heading);
-}
-
 .navbar-brand img {
   max-height: 48px;
 }
@@ -87,8 +68,8 @@ body {
 /* The README heading includes a right-aligned logo for GitHub. pkgdown already
    supplies its own correctly sized homepage logo, so hide only the duplicate
    README image on the generated website. */
-.template-home .page-header h1 > a > img {
-  display: none;
+.template-home .page-header h1 img[alt="cytoGateR hex sticker"] {
+  display: none !important;
 }
 
 .template-home .page-header h1 {
@@ -123,17 +104,22 @@ pre {
 }
 
 [data-bs-theme="dark"] .template-home main > .section.level2 {
-  border-top-color: #31534c;
+  border-top-color: var(--bs-border-color);
 }
 
 [data-bs-theme="dark"] pre {
-  border-color: #31534c;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+  border-color: var(--bs-border-color);
+  box-shadow: var(--bs-box-shadow);
+}
+
+[data-bs-theme="dark"] .template-home .page-header h1,
+[data-bs-theme="dark"] .ref-index th {
+  color: var(--bs-heading-color);
 }
 
 [data-bs-theme="dark"] .pkgdown-footer-left,
 [data-bs-theme="dark"] .pkgdown-footer-right {
-  color: #a9c9c0;
+  color: var(--bs-secondary-color);
 }
 
 @media (max-width: 767px) {
