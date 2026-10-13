@@ -76,20 +76,6 @@ install.packages("torch")
 torch::install_torch()
 ```
 
-### Bioconductor version
-
-After the package is accepted into Bioconductor, the released version
-will be installed with:
-
-``` r
-
-if (!requireNamespace("BiocManager", quietly = TRUE)) {
-  install.packages("BiocManager")
-}
-
-BiocManager::install("cytoGateR")
-```
-
 ## Quick start
 
 Load the package and its included spatial proteomics example:

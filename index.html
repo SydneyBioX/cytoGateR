@@ -143,41 +143,44 @@
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"torch"</span><span class="op">)</span></span>
 <span><span class="fu">torch</span><span class="fu">::</span><span class="fu"><a href="https://torch.mlverse.org/docs/reference/install_torch.html" class="external-link">install_torch</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-</div>
-<div class="section level3">
-<h3 id="bioconductor-version">Bioconductor version<a class="anchor" aria-label="anchor" href="#bioconductor-version"></a>
-</h3>
-<p>After the package is accepted into Bioconductor, the released version will be installed with:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"BiocManager"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"BiocManager"</span><span class="op">)</span></span>
-<span><span class="op">}</span></span>
-<span></span>
-<span><span class="fu">BiocManager</span><span class="fu">::</span><span class="fu"><a href="https://bioconductor.github.io/BiocManager/reference/install.html" class="external-link">install</a></span><span class="op">(</span><span class="st">"cytoGateR"</span><span class="op">)</span></span></code></pre></div>
+<!--
+### Bioconductor version
+
+After the package is accepted into Bioconductor, the released version will be
+installed with:
+
+```r
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+}
+
+BiocManager::install("cytoGateR")
+```
+-->
 </div>
 </div>
 <div class="section level2">
 <h2 id="quick-start">Quick start<a class="anchor" aria-label="anchor" href="#quick-start"></a>
 </h2>
 <p>Load the package and its included spatial proteomics example:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://sydneybiox.github.io/cytoGateR/">cytoGateR</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/data.html" class="external-link">data</a></span><span class="op">(</span><span class="st">"cytoGateR_example"</span>, package <span class="op">=</span> <span class="st">"cytoGateR"</span><span class="op">)</span></span>
 <span><span class="va">cytoGateR_example</span></span></code></pre></div>
 <p>Select one complete image:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">image_ids</span> <span class="op">&lt;-</span> <span class="fu">SummarizedExperiment</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">colData</a></span><span class="op">(</span><span class="va">cytoGateR_example</span><span class="op">)</span><span class="op">$</span><span class="va">image_name</span></span>
 <span><span class="va">spe</span> <span class="op">&lt;-</span> <span class="va">cytoGateR_example</span><span class="op">[</span>, <span class="va">image_ids</span> <span class="op">==</span> <span class="va">image_ids</span><span class="op">[</span><span class="fl">1L</span><span class="op">]</span><span class="op">]</span></span></code></pre></div>
 <p>Define a small marker lineage table:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">lineage_table</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  cell_type <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Tcell"</span>, <span class="st">"Bcell"</span><span class="op">)</span>,</span>
 <span>  pos_markers <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/AsIs.html" class="external-link">I</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="st">"CD3e"</span>, <span class="st">"CD20"</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>  neg_markers <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/AsIs.html" class="external-link">I</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="st">"CD20"</span>, <span class="st">"CD3e"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p>Run tree gating:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">tree_result</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/run_tree_gating.html">run_tree_gating</a></span><span class="op">(</span></span>
 <span>  <span class="va">spe</span>,</span>
 <span>  <span class="va">lineage_table</span>,</span>
@@ -190,7 +193,7 @@
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">tree_result</span><span class="op">$</span><span class="va">hard_label</span><span class="op">)</span></span></code></pre></div>
 <p>Select high-confidence reference cells:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">core_result</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/apply_cutoff_labels.html">apply_cutoff_labels</a></span><span class="op">(</span></span>
 <span>  <span class="va">tree_result</span>,</span>
 <span>  cutoff_fn <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">{</span></span>
@@ -200,7 +203,7 @@
 <span>  unknown_label <span class="op">=</span> <span class="st">"Unknown"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
 <p>The packaged demo also contains full tree-gating and weighted-kNN results:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cd</span> <span class="op">&lt;-</span> <span class="fu">SummarizedExperiment</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/SummarizedExperiment/man/SummarizedExperiment-class.html" class="external-link">colData</a></span><span class="op">(</span><span class="va">cytoGateR_example</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">table</a></span><span class="op">(</span><span class="va">cd</span><span class="op">$</span><span class="va">core_group</span><span class="op">)</span></span>
@@ -229,7 +232,7 @@
 <strong>Hierarchical kNN Classification</strong> — lineage hierarchy construction and recursive prediction</li>
 </ol>
 <p>After installation, list the available vignettes with:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/browseVignettes.html" class="external-link">browseVignettes</a></span><span class="op">(</span><span class="st">"cytoGateR"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
@@ -238,20 +241,20 @@
 <p>The packaged example is derived from the IMMUcan 2022 Cancer Example dataset provided by <code>imcdatasets</code>. Its complete creation workflow is documented in:</p>
 <pre class="text"><code><span><span class="va">inst</span><span class="op">/</span><span class="va">scripts</span><span class="op">/</span><span class="va">create_cytoGateR_example.R</span></span></code></pre>
 <p>From the R package source directory, regenerate it with:</p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="ex">Rscript</span> inst/scripts/create_cytoGateR_example.R</span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="ex">Rscript</span> inst/scripts/create_cytoGateR_example.R</span></code></pre></div>
 <p>The script performs sample selection, metadata reduction, tree gating, high-confidence reference selection, weighted-kNN prediction, probability validation, and compressed <code>.rda</code> creation.</p>
 </div>
 <div class="section level2">
 <h2 id="development">Development<a class="anchor" aria-label="anchor" href="#development"></a>
 </h2>
 <p>Run the unit tests with:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">test</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p>Regenerate documentation with:</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">roxygen2</span><span class="fu">::</span><span class="fu">roxygenise</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p>Build the package and its Quarto vignettes with:</p>
-<div class="sourceCode" id="cb15"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" tabindex="-1"></a><span class="ex">R</span> CMD build cytoGateR</span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="ex">R</span> CMD build cytoGateR</span></code></pre></div>
 <p>Issues and feature requests can be reported through the <a href="https://github.com/SydneyBioX/cytoGateR/issues" class="external-link">GitHub issue tracker</a>.</p>
 </div>
 <div class="section level2">

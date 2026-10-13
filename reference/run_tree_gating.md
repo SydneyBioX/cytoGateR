@@ -156,9 +156,9 @@ tree_result <- run_tree_gating(
   workers = 1
 )
 #> Building 1th tree - Tcell Cell Type.
-#> finished tree 1 - Tcell | elapsed: 0.052 s | peak RAM: 0.02 GB
+#> finished tree 1 - Tcell | elapsed: 0.041 s | peak RAM: 0.02 GB
 #> Building 2th tree - Bcell Cell Type.
-#> finished tree 2 - Bcell | elapsed: 0.031 s | peak RAM: 0.02 GB
+#> finished tree 2 - Bcell | elapsed: 0.024 s | peak RAM: 0.02 GB
 head(tree_result$hard_label)
 #> [1] "Uncertain" "Uncertain" "Uncertain" "Uncertain" "Uncertain" "Tcell"    
 ```
