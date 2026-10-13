@@ -84,6 +84,13 @@ body {
   padding-top: 3rem;
 }
 
+/* The README heading includes a right-aligned logo for GitHub. pkgdown already
+   supplies its own correctly sized homepage logo, so hide only the duplicate
+   README image on the generated website. */
+.template-home .page-header h1 > a > img {
+  display: none;
+}
+
 .template-home .page-header h1 {
   color: var(--cyto-heading);
   font-weight: 750;
