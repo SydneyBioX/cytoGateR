@@ -5,7 +5,7 @@ template:
   light-switch: true
   bslib:
     bg: "#fbfcf8"
-    fg: "#17342d"
+    fg: "#212529"
     primary: "#087f73"
     secondary: "#e6a04b"
     link-color: "#087f73"
