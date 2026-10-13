@@ -2,23 +2,25 @@ url: https://sydneybiox.github.io/cytoGateR/
 
 template:
   bootstrap: 5
+  light-switch: true
   bslib:
     bg: "#fbfcf8"
     fg: "#17342d"
     primary: "#087f73"
     secondary: "#e6a04b"
     link-color: "#087f73"
-    navbar-bg: "#123c35"
-    navbar-light-color: "#eef7f3"
-    navbar-light-hover-color: "#ffffff"
+    navbar-light-bg: "#123c35"
+    navbar-dark-bg: "#0b2924"
     border-radius: "0.8rem"
   includes:
-    in_header: pkgdown/header.html
+    in_header: |
+      <meta name="theme-color" content="#123c35">
+      <meta name="description" content="cytoGateR provides marker-aware cell-type annotation for spatial protein imaging data.">
 
 navbar:
   structure:
     left: [intro, reference, articles, ecosystem]
-    right: [search, github]
+    right: [search, github, lightswitch]
   components:
     intro:
       text: Get started
