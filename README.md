@@ -69,7 +69,7 @@ package and its runtime:
 install.packages("torch")
 torch::install_torch()
 ```
-
+<!--
 ### Bioconductor version
 
 After the package is accepted into Bioconductor, the released version will be
@@ -82,6 +82,7 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) {
 
 BiocManager::install("cytoGateR")
 ```
+-->
 
 ## Quick start
 
@@ -167,13 +168,12 @@ The package includes four evaluated vignettes:
    uncertainty
 4. **Hierarchical kNN Classification** — lineage hierarchy construction and
    recursive prediction
-<!--
+
 After installation, list the available vignettes with:
 
 ```r
 browseVignettes("cytoGateR")
 ```
--->
 
 ## Recreating the example data
 
