@@ -5,6 +5,10 @@ protein imaging data, such as imaging mass cytometry (IMC) and CODEX data.
 It combines interpretable marker gating with supervised prediction to annotate
 cells that cannot be confidently assigned by gating alone.
 
+Looking for Python? The Python implementation is maintained separately in
+[`SydneyBioX/cytoGateR-py`](https://github.com/SydneyBioX/cytoGateR-py) and is
+available from [PyPI](https://pypi.org/project/cytogater/).
+
 The package works with standard Bioconductor `SpatialExperiment` and
 `SummarizedExperiment` objects. Annotation labels, class probabilities, and
 uncertainty measurements are stored in the object metadata so that results
