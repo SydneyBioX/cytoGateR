@@ -167,12 +167,13 @@ The package includes four evaluated vignettes:
    uncertainty
 4. **Hierarchical kNN Classification** — lineage hierarchy construction and
    recursive prediction
-
+<!--
 After installation, list the available vignettes with:
 
 ```r
 browseVignettes("cytoGateR")
 ```
+-->
 
 ## Recreating the example data
 
