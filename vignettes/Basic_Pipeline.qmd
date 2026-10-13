@@ -6,6 +6,8 @@ date: "2026-02-15"
 params:
   evalc: TRUE
   show: 'as.is'
+execute:
+  eval: false
 vignette: >
   %\VignetteIndexEntry{Basic Pipeline}
   %\VignetteEngine{quarto::html}
@@ -483,5 +485,4 @@ ggpubr::ggarrange(
 )
 
 ```
-
 

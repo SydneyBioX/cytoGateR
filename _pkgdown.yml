@@ -1,0 +1,136 @@
+url: https://sydneybiox.github.io/cytoGateR/
+
+template:
+  bootstrap: 5
+  bslib:
+    bg: "#fbfcf8"
+    fg: "#17342d"
+    primary: "#087f73"
+    secondary: "#e6a04b"
+    link-color: "#087f73"
+    navbar-bg: "#123c35"
+    navbar-light-color: "#eef7f3"
+    navbar-light-hover-color: "#ffffff"
+    border-radius: "0.8rem"
+  includes:
+    in_header: pkgdown/header.html
+
+navbar:
+  structure:
+    left: [intro, reference, articles, ecosystem]
+    right: [search, github]
+  components:
+    intro:
+      text: Get started
+      href: articles/Introduction.html
+    articles:
+      text: Articles
+      menu:
+      - text: Tree gating and visualisation
+        href: articles/Tree_Gating_Visualisation.html
+      - text: Machine-learning prediction
+        href: articles/Machine_Learning_Prediction.html
+      - text: Hierarchical kNN
+        href: articles/Hierarchical_KNN.html
+    ecosystem:
+      text: Ecosystem
+      menu:
+      - text: cytoGateR for R
+        href: https://github.com/SydneyBioX/cytoGateR
+      - text: cytoGateR for Python
+        href: https://github.com/SydneyBioX/cytoGateR-py
+      - text: cytoNavigator LLM agent
+        href: https://github.com/SydneyBioX/cytoNavigator
+
+home:
+  title: Marker-aware cell annotation for spatial proteomics
+  description: >
+    Interpretable gating, supervised prediction, and uncertainty measurements
+    for SpatialExperiment and SummarizedExperiment workflows.
+
+articles:
+- title: Start here
+  navbar: ~
+  contents:
+  - Introduction
+- title: Annotation workflows
+  contents:
+  - Tree_Gating_Visualisation
+  - Machine_Learning_Prediction
+  - Hierarchical_KNN
+- title: Extended examples
+  contents:
+  - Basic_Pipeline
+
+reference:
+- title: Marker-aware gating
+  desc: Build interpretable cell-type scores, gates, and gating trees.
+  contents:
+  - fit_gmm_2
+  - fit_marker_stats
+  - gmm_equal_posterior_cutoff
+  - marker_separability
+  - neg_penalty
+  - score_marker_logistic
+  - score_marker_rank
+  - calculate_soft_scores
+  - assign_soft_labels
+  - run_soft_gating
+  - run_tree_gating
+  - build_fullcoverage_tree
+  - collect_path_scores
+  - tree_prob
+
+- title: Reference cells and prediction
+  desc: Select confident references and classify cells that remain unresolved.
+  contents:
+  - apply_cutoff_labels
+  - assign_confident_labels
+  - compute_custom_labels
+  - custom_labels
+  - prob_mad_cutoff
+  - prob_quantile_cutoff
+  - train_custom_knn
+  - predict_unknown_with_knn
+  - predict_wknn_multi
+  - train_custom_randomforest
+  - predict_unknown_with_randomforest
+  - train_custom_dl
+  - predict_unknown_with_dl
+  - build_lineage_hierarchy
+  - build_hierarchical_reference
+  - predict_hierarchical_knn_recursive
+
+- title: Metrics and uncertainty
+  desc: Quantify agreement, classification performance, and spatial uncertainty.
+  contents:
+  - calculate_f1
+  - calculate_uncertainty
+  - calculate_spatial_prior_labels
+  - class_metrics_from_fit
+  - label_agreement_rates
+  - label_confusion_matrix
+  - probability_label_matrix
+  - rf_metric_table
+  - rf_metric_text
+
+- title: Visualisation
+  desc: Inspect marker distributions, spatial labels, probabilities, and trees.
+  contents:
+  - starts_with("plot_")
+  - print_celltype_tree
+  - tree_to_df
+
+- title: Data
+  contents:
+  - cytoGateR_example
+
+footer:
+  structure:
+    left: developed_by
+    right: built_with
+
+development:
+  mode: auto
+
+extra_css: pkgdown/extra.css

@@ -1,4 +1,4 @@
-# cytoGateR  <a href="https://github.com/SydneyBioX/cytoGateR"><img src="https://i.imgur.com/BmRpXzR.png" title="cytoGateR hex sticker" align="right" height="138" /></a>
+# cytoGateR  <a href="https://github.com/SydneyBioX/cytoGateR"><img src="https://i.imgur.com/BmRpXzR.png" alt="cytoGateR hex sticker" title="cytoGateR hex sticker" align="right" height="138" /></a>
 
 `cytoGateR` is an R package for marker-aware cell-type annotation in spatial
 protein imaging data, such as imaging mass cytometry (IMC) and CODEX data.
@@ -18,6 +18,9 @@ The package works with standard Bioconductor `SpatialExperiment` and
 `SummarizedExperiment` objects. Annotation labels, class probabilities, and
 uncertainty measurements are stored in the object metadata so that results
 remain compatible with other Bioconductor workflows.
+
+Browse the [cytoGateR package website](https://sydneybiox.github.io/cytoGateR/)
+for the complete function reference and worked examples.
 
 ## Development status
 

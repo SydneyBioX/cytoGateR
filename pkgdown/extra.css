@@ -1,0 +1,61 @@
+:root {
+  --cyto-ink: #17342d;
+  --cyto-green: #087f73;
+  --cyto-green-dark: #123c35;
+  --cyto-amber: #e6a04b;
+  --cyto-mist: #eef7f3;
+}
+
+body {
+  letter-spacing: -0.008em;
+}
+
+.navbar {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.navbar-brand img {
+  max-height: 48px;
+}
+
+.template-home .page-header {
+  border: 0;
+  padding-top: 3rem;
+}
+
+.template-home .page-header h1 {
+  color: var(--cyto-green-dark);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+}
+
+.template-home main > .section.level2 {
+  border-top: 1px solid #dce8e3;
+  margin-top: 2.5rem;
+  padding-top: 2rem;
+}
+
+.contents a,
+.page-header a {
+  text-underline-offset: 0.16em;
+}
+
+pre {
+  border: 1px solid #d9e7e1;
+  box-shadow: 0 12px 30px rgba(18, 60, 53, 0.07);
+}
+
+.ref-index th {
+  color: var(--cyto-green-dark);
+}
+
+.pkgdown-footer-left,
+.pkgdown-footer-right {
+  color: #557069;
+}
+
+@media (max-width: 767px) {
+  .template-home .page-header {
+    padding-top: 1.5rem;
+  }
+}
