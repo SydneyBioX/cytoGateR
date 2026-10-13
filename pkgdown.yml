@@ -1,0 +1,13 @@
+pandoc: 3.8.3
+pkgdown: 2.2.1
+pkgdown_sha: ~
+articles:
+  Basic_Pipeline: Basic_Pipeline.html
+  Hierarchical_KNN: Hierarchical_KNN.html
+  Introduction: Introduction.html
+  Machine_Learning_Prediction: Machine_Learning_Prediction.html
+  Tree_Gating_Visualisation: Tree_Gating_Visualisation.html
+last_built: 2026-10-13T03:31Z
+urls:
+  reference: https://sydneybiox.github.io/cytoGateR/reference
+  article: https://sydneybiox.github.io/cytoGateR/articles

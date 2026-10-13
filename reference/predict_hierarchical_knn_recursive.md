@@ -1,0 +1,117 @@
+# Recursive Hierarchical kNN with BiocParallel Ensemble
+
+Recursive Hierarchical kNN with BiocParallel Ensemble
+
+## Usage
+
+``` r
+predict_hierarchical_knn_recursive(
+  spe,
+  hier_ref,
+  hc_tree,
+  assay_name = "exprs",
+  threshold = 0.7,
+  agreement_threshold = 0.8,
+  k = 5,
+  repeats = 5,
+  dist_methods = c("pearson", "cosine"),
+  BPPARAM = BiocParallel::SerialParam(),
+  out_col = "hier_label",
+  chunk_size = 1000L,
+  unassigned_label = "Unassigned"
+)
+```
+
+## Arguments
+
+- spe:
+
+  SpatialExperiment object.
+
+- hier_ref:
+
+  List of node-specific references from build_hierarchical_reference.
+
+- hc_tree:
+
+  hclust object defining the hierarchy.
+
+- assay_name:
+
+  Assay to use (default "exprs").
+
+- threshold:
+
+  Confidence threshold (average kNN probability).
+
+- agreement_threshold:
+
+  Minimum % of ensemble members that must agree (0-1).
+
+- k:
+
+  Number of neighbors for kNN.
+
+- repeats:
+
+  Number of bootstrap repeats per distance method.
+
+- dist_methods:
+
+  Vector of methods, e.g., c("pearson", "cosine").
+
+- BPPARAM:
+
+  BiocParallel parameter (default: SerialParam()).
+
+- out_col:
+
+  Column name for final labels.
+
+- chunk_size:
+
+  Integer specifying the number of cells processed per chunk during
+  prediction. Increasing this value may improve speed but requires more
+  memory. Default is `1000L`
+
+- unassigned_label:
+
+  character label for Unassigned cells (default "Unassigned")
+
+## Examples
+
+``` r
+# \donttest{
+data("cytoGateR_example", package = "cytoGateR")
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+SummarizedExperiment::colData(spe)$cleaned_core_label <-
+  SummarizedExperiment::colData(spe)$core_group
+SummarizedExperiment::colData(spe)$cleaned_core_label[
+  SummarizedExperiment::colData(spe)$cleaned_core_label == "Unassigned"
+] <- "Unknown"
+hc_tree <- build_lineage_hierarchy(
+  spe,
+  label_col = "cleaned_core_label"
+)
+hier_ref <- build_hierarchical_reference(
+  spe,
+  hc_tree,
+  label_col = "cleaned_core_label",
+  top_n = NULL,
+  unknown_label = "Unknown"
+)
+spe <- predict_hierarchical_knn_recursive(
+  spe,
+  hier_ref,
+  hc_tree,
+  repeats = 1,
+  dist_methods = "pearson",
+  k = 3
+)
+#> Starting recursive ensemble classification for 4363 cells (chunk_size=1000)...
+head(SummarizedExperiment::colData(spe)$hier_label)
+#> [1] "BnTcell"    "Bcell"      "BnTcell"    "Unassigned" "BnTcell"   
+#> [6] "CD4"       
+# }
+```

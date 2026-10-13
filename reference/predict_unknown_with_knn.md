@@ -1,0 +1,113 @@
+# Predict and fill unknown labels using a weighted kNN model
+
+This function takes a SpatialExperiment object and a trained kNN
+reference to predict labels for "Unknown" or NA cells. It returns the
+updated SPE and a probability matrix for the predicted cells only.
+
+## Usage
+
+``` r
+predict_unknown_with_knn(
+  spe,
+  knn_ref,
+  assay_name = "exprs",
+  label_col = "cutoff_label",
+  out_col = "knn_label_filled",
+  pred_col = "knn_pred",
+  unknown_label = "Unknown",
+  unassigned_label = "Unassigned",
+  threshold = 0.6,
+  k = 5,
+  dist_method = "pearson",
+  chunk_size = 10000L
+)
+```
+
+## Arguments
+
+- spe:
+
+  A SpatialExperiment or SingleCellExperiment object.
+
+- knn_ref:
+
+  A list containing the reference data, labels, and features (from
+  train_custom_knn).
+
+- assay_name:
+
+  Name of the assay to use for features (default "exprs").
+
+- label_col:
+
+  The original label column containing "Unknown" cells.
+
+- out_col:
+
+  Output column name for filled labels.
+
+- pred_col:
+
+  Column name for raw kNN predictions.
+
+- unknown_label:
+
+  String identifying missing labels (default "Unknown").
+
+- unassigned_label:
+
+  Label for cells below the confidence threshold.
+
+- threshold:
+
+  Minimum vote proportion (0-1) to accept a label (default 0.6).
+
+- k:
+
+  Number of neighbors.
+
+- dist_method:
+
+  Distance metric ("pearson", "cosine", etc.).
+
+- chunk_size:
+
+  Number of cells to process per chunk for memory management.
+
+## Value
+
+A list containing the updated `spe` and the `prob_mat` (unknowns only).
+
+## Examples
+
+``` r
+# \donttest{
+data("cytoGateR_example", package = "cytoGateR")
+image_ids <- SummarizedExperiment::colData(cytoGateR_example)$image_name
+spe <- cytoGateR_example[, image_ids == image_ids[1L]]
+knn_ref <- train_custom_knn(
+  spe,
+  label_col = "core_group",
+  unknown_label = "Unassigned",
+  features = c("CD3e", "CD20", "CD4", "CD8a"),
+  cv_folds = 2,
+  repeats = 1,
+  agreement_thresh = 0.5,
+  k = 3,
+  seed = 1
+)
+#> Starting Parallel Weighted kNN (pearson) cleaning on 1378 cells: 1 repeats...
+#> Aggregating results from workers...
+prediction <- predict_unknown_with_knn(
+  knn_ref$spe,
+  knn_ref,
+  label_col = "cleaned_core_label",
+  unknown_label = "Unassigned",
+  threshold = 0.5,
+  k = 3
+)
+#> Predicting 3577 unknown cells using pearson kNN...
+head(SummarizedExperiment::colData(prediction$spe)$knn_label_filled)
+#> [1] "CD8"     "Bcell"   "BnTcell" "CD8"     "BnTcell" "CD4"    
+# }
+```
